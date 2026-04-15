@@ -137,7 +137,7 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                 if (block.type === 'TEXT') {
                   return (
                     <section key={block.id} className={`rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm ${blockWidthClass}`}>
-                      <div dangerouslySetInnerHTML={{ __html: parsedBlock.content }} />
+                      <div className="handbook-richtext" dangerouslySetInnerHTML={{ __html: parsedBlock.content }} />
                     </section>
                   );
                 }

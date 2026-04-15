@@ -124,7 +124,7 @@ function RichHtmlEditor({
       contentEditable
       suppressContentEditableWarning
       onInput={(event) => onChange(event.currentTarget.innerHTML)}
-      className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
+      className="handbook-richtext min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
     />
   );
 }
@@ -1424,7 +1424,7 @@ export default function DashboardApp() {
                         if (block.type === 'TEXT') {
                           return (
                             <section key={`preview-${index}`} className={`rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm ${blockWidthClass}`}>
-                              <div dangerouslySetInnerHTML={{ __html: meta.content || '<p class="text-slate-400">Leerer Textblock</p>' }} />
+                              <div className="handbook-richtext" dangerouslySetInnerHTML={{ __html: meta.content || '<p class="text-slate-400">Leerer Textblock</p>' }} />
                             </section>
                           );
                         }

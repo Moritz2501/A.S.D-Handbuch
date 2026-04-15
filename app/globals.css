@@ -40,3 +40,23 @@ select {
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(18px);
 }
+
+.handbook-richtext ul {
+  list-style: disc;
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.handbook-richtext ol {
+  list-style: decimal;
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.handbook-richtext li {
+  margin: 0.25rem 0;
+}
+
+.handbook-richtext p {
+  margin: 0.5rem 0;
+}
