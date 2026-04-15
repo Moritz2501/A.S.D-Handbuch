@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { toYouTubeEmbedUrl } from '@/lib/youtube';
 import Navbar from '@/app/components/Navbar';
 import type { Metadata } from 'next';
 
@@ -163,11 +164,12 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                   );
                 }
                 if (block.type === 'VIDEO') {
+                  const videoSrc = toYouTubeEmbedUrl(parsedBlock.content) || parsedBlock.content;
                   return (
                     <section key={block.id} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm ${blockWidthClass}`}>
                       <div className="aspect-video overflow-hidden rounded-3xl bg-black">
                         <iframe
-                          src={parsedBlock.content}
+                          src={videoSrc}
                           title="Video Embed"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LogoutButton from './LogoutButton';
+import { toYouTubeEmbedUrl } from '@/lib/youtube';
 
 const rankOptions = [
   { value: 'ASD_Director', label: 'A.S.D Director' },
@@ -1491,11 +1492,14 @@ export default function DashboardApp() {
                               value={getBlockRawContent(block.content || '')}
                               onChange={(event) => handleBlockChange(index, 'content', event.target.value)}
                               className="mt-3 w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
-                              placeholder={block.type === 'VIDEO' ? 'Embed-Link einfügen' : 'HTML-Inhalt einfügen'}
+                              placeholder={block.type === 'VIDEO' ? 'YouTube-Link einfügen (z. B. https://youtu.be/...)' : 'HTML-Inhalt einfügen'}
                             />
                           )
                         ) : (
                           <p className="mt-3 text-sm text-slate-400">Trennlinie wird ohne weiteren Inhalt dargestellt.</p>
+                        )}
+                        {block.type === 'VIDEO' && (
+                          <p className="mt-2 text-xs text-slate-400">Normale YouTube-Links werden automatisch als eingebettetes Video angezeigt.</p>
                         )}
                       </div>
                     ))}
@@ -1553,12 +1557,13 @@ export default function DashboardApp() {
                         }
 
                         if (block.type === 'VIDEO') {
+                          const videoSrc = toYouTubeEmbedUrl(meta.content) || meta.content;
                           return (
                             <section key={`preview-${index}`} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm ${blockWidthClass}`}>
                               {meta.content ? (
                                 <div className="aspect-video overflow-hidden rounded-3xl bg-black">
                                   <iframe
-                                    src={meta.content}
+                                    src={videoSrc}
                                     title={`Video Vorschau ${index + 1}`}
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                     allowFullScreen
