@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import LogoutButton from './LogoutButton';
 
 const rankOptions = [
@@ -25,6 +25,36 @@ const trainingOptions = ['Basic Flight Training', 'Advanced Navigation', 'Emerge
 
 function simpleDate(value: string) {
   return value ? new Date(value).toISOString().split('T')[0] : '';
+}
+
+function RichHtmlEditor({
+  editorId,
+  value,
+  onChange,
+}: {
+  editorId: string;
+  value: string;
+  onChange: (nextValue: string) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || '';
+    }
+  }, [value]);
+
+  return (
+    <div
+      data-block-editor={editorId}
+      ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={(event) => onChange(event.currentTarget.innerHTML)}
+      className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
+    />
+  );
 }
 
 export default function DashboardApp() {
@@ -1152,13 +1182,10 @@ export default function DashboardApp() {
                                   Format löschen
                                 </button>
                               </div>
-                              <div
-                                data-block-editor={index}
-                                contentEditable
-                                suppressContentEditableWarning
-                                onInput={(event) => handleBlockChange(index, 'content', event.currentTarget.innerHTML)}
-                                className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
-                                dangerouslySetInnerHTML={{ __html: block.content }}
+                              <RichHtmlEditor
+                                editorId={String(index)}
+                                value={block.content}
+                                onChange={(nextValue) => handleBlockChange(index, 'content', nextValue)}
                               />
                             </div>
                           ) : block.type === 'IMAGE' ? (
