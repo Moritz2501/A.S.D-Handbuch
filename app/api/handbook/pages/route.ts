@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthenticated(req)) {
+  if (!(await isAuthenticated(req))) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
   if (!prisma) {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAuthenticated(req)) {
+  if (!(await isAuthenticated(req))) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
   if (!prisma) {

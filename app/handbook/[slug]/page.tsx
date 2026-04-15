@@ -10,16 +10,18 @@ async function getPage(slug: string) {
   });
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const page = await getPage(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const page = await getPage(slug);
   return {
     title: page?.title || 'Handbuchseite',
     description: page?.description || 'Air Support Division Handbuchseite',
   };
 }
 
-export default async function HandbookPage({ params }: { params: { slug: string } }) {
-  const page = await getPage(params.slug);
+export default async function HandbookPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const page = await getPage(slug);
   if (!page || !page.published) {
     return (
       <main className="min-h-screen bg-background text-white">
