@@ -4,19 +4,49 @@ import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
-type BlockLayout = 'full' | 'half';
+type BlockColumns = 1 | 2 | 3 | 4;
+type ImageSize = 'small' | 'medium' | 'large';
 
-const layoutPrefix = /^\[\[layout:(full|half)\]\]/;
+const columnClassMap: Record<BlockColumns, string> = {
+  1: 'md:col-span-1',
+  2: 'md:col-span-2',
+  3: 'md:col-span-3',
+  4: 'md:col-span-4',
+};
 
-function parseBlockLayout(content: string): { layout: BlockLayout; content: string } {
-  const match = content.match(layoutPrefix);
-  if (!match) {
-    return { layout: 'full', content };
+const imageHeightClassMap: Record<ImageSize, string> = {
+  small: 'h-52 md:h-56',
+  medium: 'h-64 md:h-72',
+  large: 'h-80 md:h-96',
+};
+
+function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; content: string } {
+  let rawContent = content || '';
+  let columns: BlockColumns = 4;
+  let imageSize: ImageSize = 'medium';
+
+  while (true) {
+    const match = rawContent.match(/^\[\[(layout|cols|imgSize):(full|half|1|2|3|4|small|medium|large)\]\]/);
+    if (!match) break;
+
+    const [, key, value] = match;
+    if (key === 'layout') {
+      columns = value === 'half' ? 2 : 4;
+    }
+    if (key === 'cols') {
+      const parsed = Number(value);
+      if (parsed >= 1 && parsed <= 4) {
+        columns = parsed as BlockColumns;
+      }
+    }
+    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large')) {
+      imageSize = value;
+    }
+
+    rawContent = rawContent.slice(match[0].length);
   }
-  return {
-    layout: match[1] === 'half' ? 'half' : 'full',
-    content: content.replace(layoutPrefix, ''),
-  };
+
+  return { columns, imageSize, content: rawContent };
 }
 
 async function getPage(slug: string) {
@@ -97,11 +127,12 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-4">
               {page.blocks.map((block: any) => {
-                const parsedBlock = parseBlockLayout(block.content || '');
-                const isFullWidth = block.type === 'DIVIDER' || parsedBlock.layout === 'full';
-                const blockWidthClass = isFullWidth ? 'md:col-span-2' : 'md:col-span-1';
+                const parsedBlock = parseBlockMeta(block.content || '');
+                const blockColumns: BlockColumns = block.type === 'DIVIDER' ? 4 : parsedBlock.columns;
+                const blockWidthClass = columnClassMap[blockColumns];
+                const imageHeightClass = imageHeightClassMap[parsedBlock.imageSize];
 
                 if (block.type === 'TEXT') {
                   return (
@@ -113,7 +144,7 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                 if (block.type === 'IMAGE') {
                   return (
                     <section key={block.id} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm ${blockWidthClass}`}>
-                      <img src={parsedBlock.content} alt="Handbuch Bild" className="w-full object-cover" />
+                      <img src={parsedBlock.content} alt="Handbuch Bild" className={`w-full object-cover ${imageHeightClass}`} />
                     </section>
                   );
                 }

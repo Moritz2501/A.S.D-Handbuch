@@ -23,24 +23,77 @@ const rankHierarchy = [
 
 const trainingOptions = ['Basic Flight Training', 'Advanced Navigation', 'Emergency Response'];
 
-type BlockLayout = 'full' | 'half';
-const layoutPrefix = /^\[\[layout:(full|half)\]\]/;
+type BlockColumns = 1 | 2 | 3 | 4;
+type ImageSize = 'small' | 'medium' | 'large';
 
-function stripLayoutPrefix(content: string): string {
-  return (content || '').replace(layoutPrefix, '');
+function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; content: string } {
+  let rawContent = content || '';
+  let columns: BlockColumns = 4;
+  let imageSize: ImageSize = 'medium';
+
+  // Alte und neue Präfixe am Anfang des Inhalts unterstützen.
+  while (true) {
+    const match = rawContent.match(/^\[\[(layout|cols|imgSize):(full|half|1|2|3|4|small|medium|large)\]\]/);
+    if (!match) break;
+
+    const [, key, value] = match;
+    if (key === 'layout') {
+      columns = value === 'half' ? 2 : 4;
+    }
+    if (key === 'cols') {
+      const parsed = Number(value);
+      if (parsed >= 1 && parsed <= 4) {
+        columns = parsed as BlockColumns;
+      }
+    }
+    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large')) {
+      imageSize = value;
+    }
+
+    rawContent = rawContent.slice(match[0].length);
+  }
+
+  return { columns, imageSize, content: rawContent };
 }
 
-function getBlockLayout(content: string): BlockLayout {
-  const match = (content || '').match(layoutPrefix);
-  if (!match) return 'full';
-  return match[1] === 'half' ? 'half' : 'full';
+function buildBlockContent(rawContent: string, columns: BlockColumns, imageSize: ImageSize): string {
+  const cleanContent = rawContent || '';
+  const prefixes: string[] = [];
+
+  if (columns !== 4) {
+    prefixes.push(`[[cols:${columns}]]`);
+  }
+  if (imageSize !== 'medium') {
+    prefixes.push(`[[imgSize:${imageSize}]]`);
+  }
+
+  return `${prefixes.join('')}${cleanContent}`;
 }
 
-function withBlockLayout(content: string, layout: BlockLayout): string {
-  const rawContent = stripLayoutPrefix(content || '');
-  if (layout === 'full') return rawContent;
-  return `[[layout:${layout}]]${rawContent}`;
+function getBlockRawContent(content: string): string {
+  return parseBlockMeta(content).content;
 }
+
+function getBlockColumns(content: string): BlockColumns {
+  return parseBlockMeta(content).columns;
+}
+
+function getBlockImageSize(content: string): ImageSize {
+  return parseBlockMeta(content).imageSize;
+}
+
+const previewColumnClassMap: Record<BlockColumns, string> = {
+  1: 'md:col-span-1',
+  2: 'md:col-span-2',
+  3: 'md:col-span-3',
+  4: 'md:col-span-4',
+};
+
+const previewImageHeightClassMap: Record<ImageSize, string> = {
+  small: 'h-52 md:h-56',
+  medium: 'h-64 md:h-72',
+  large: 'h-80 md:h-96',
+};
 
 function simpleDate(value: string) {
   return value ? new Date(value).toISOString().split('T')[0] : '';
@@ -459,17 +512,37 @@ export default function DashboardApp() {
         if (idx !== index) return block;
         if (key !== 'content') return { ...block, [key]: value };
 
-        const currentLayout = getBlockLayout(block.content || '');
-        return { ...block, content: withBlockLayout(value, currentLayout) };
+        const parsedMeta = parseBlockMeta(block.content || '');
+        return {
+          ...block,
+          content: buildBlockContent(value, parsedMeta.columns, parsedMeta.imageSize),
+        };
       })
     );
   }
 
-  function handleBlockLayoutChange(index: number, layout: BlockLayout) {
+  function handleBlockColumnsChange(index: number, columns: BlockColumns) {
     setEditorBlocks((current) =>
       current.map((block, idx) => {
         if (idx !== index) return block;
-        return { ...block, content: withBlockLayout(block.content || '', layout) };
+        const parsedMeta = parseBlockMeta(block.content || '');
+        return {
+          ...block,
+          content: buildBlockContent(parsedMeta.content, columns, parsedMeta.imageSize),
+        };
+      })
+    );
+  }
+
+  function handleImageSizeChange(index: number, imageSize: ImageSize) {
+    setEditorBlocks((current) =>
+      current.map((block, idx) => {
+        if (idx !== index) return block;
+        const parsedMeta = parseBlockMeta(block.content || '');
+        return {
+          ...block,
+          content: buildBlockContent(parsedMeta.content, parsedMeta.columns, imageSize),
+        };
       })
     );
   }
@@ -1027,7 +1100,16 @@ export default function DashboardApp() {
                             type="button"
                             onClick={async () => {
                               if (confirm(`"${page.title}" wirklich löschen?`)) {
-                                await fetch(`/api/handbook/pages?id=${page.id}`, { method: 'DELETE' });
+                                const response = await fetch('/api/handbook/pages', {
+                                  method: 'DELETE',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: page.id }),
+                                });
+                                if (!response.ok) {
+                                  const data = await response.json().catch(() => ({}));
+                                  setError(data.error || 'Seite konnte nicht gelöscht werden');
+                                  return;
+                                }
                                 await refreshData();
                               }
                             }}
@@ -1115,17 +1197,31 @@ export default function DashboardApp() {
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => handleBlockLayoutChange(index, 'full')}
-                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockLayout(block.content || '') === 'full' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                  onClick={() => handleBlockColumnsChange(index, 1)}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockColumns(block.content || '') === 1 ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
                                 >
-                                  Volle Breite
+                                  1/4
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleBlockLayoutChange(index, 'half')}
-                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockLayout(block.content || '') === 'half' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                  onClick={() => handleBlockColumnsChange(index, 2)}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockColumns(block.content || '') === 2 ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
                                 >
-                                  1/2 Breite
+                                  2/4
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBlockColumnsChange(index, 3)}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockColumns(block.content || '') === 3 ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  3/4
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBlockColumnsChange(index, 4)}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockColumns(block.content || '') === 4 ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  4/4
                                 </button>
                               </>
                             )}
@@ -1238,12 +1334,36 @@ export default function DashboardApp() {
                               </div>
                               <RichHtmlEditor
                                 editorId={String(index)}
-                                value={stripLayoutPrefix(block.content || '')}
+                                value={getBlockRawContent(block.content || '')}
                                 onChange={(nextValue) => handleBlockChange(index, 'content', nextValue)}
                               />
                             </div>
                           ) : block.type === 'IMAGE' ? (
                             <div className="mt-3 space-y-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm text-slate-300">Bildgröße:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleImageSizeChange(index, 'small')}
+                                  className={`rounded-xl border px-3 py-1 text-xs transition ${getBlockImageSize(block.content || '') === 'small' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  Klein
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleImageSizeChange(index, 'medium')}
+                                  className={`rounded-xl border px-3 py-1 text-xs transition ${getBlockImageSize(block.content || '') === 'medium' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  Mittel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleImageSizeChange(index, 'large')}
+                                  className={`rounded-xl border px-3 py-1 text-xs transition ${getBlockImageSize(block.content || '') === 'large' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  Groß
+                                </button>
+                              </div>
                               <label className="block text-sm font-medium text-slate-300">Bild aus dem Explorer auswählen</label>
                               <input
                                 type="file"
@@ -1257,7 +1377,7 @@ export default function DashboardApp() {
                               />
                               {block.content ? (
                                 <div className="rounded-2xl border border-white/10 bg-black/80 p-3">
-                                  <img src={stripLayoutPrefix(block.content || '')} alt={`Handbuchbild ${index + 1}`} className="w-full object-contain rounded-2xl" />
+                                  <img src={getBlockRawContent(block.content || '')} alt={`Handbuchbild ${index + 1}`} className="w-full object-contain rounded-2xl" />
                                   <p className="mt-2 text-sm text-slate-400">Bild wurde hochgeladen und wird beim Speichern der Seite verwendet.</p>
                                 </div>
                               ) : (
@@ -1268,7 +1388,7 @@ export default function DashboardApp() {
                           ) : (
                             <textarea
                               rows={4}
-                              value={stripLayoutPrefix(block.content || '')}
+                              value={getBlockRawContent(block.content || '')}
                               onChange={(event) => handleBlockChange(index, 'content', event.target.value)}
                               className="mt-3 w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
                               placeholder={block.type === 'VIDEO' ? 'Embed-Link einfügen' : 'HTML-Inhalt einfügen'}
@@ -1282,6 +1402,76 @@ export default function DashboardApp() {
                   </div>
                   <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">Speichern</button>
                 </form>
+
+                <div className="mt-8 rounded-3xl border border-white/10 bg-black/50 p-4">
+                  <h3 className="text-lg font-semibold text-white">Live-Vorschau</h3>
+                  <p className="mt-1 text-sm text-slate-400">So wird die Seite aktuell dargestellt. Änderungen an Breite und Bildgröße siehst du sofort.</p>
+
+                  <div className="mt-4 rounded-[2rem] border border-white/10 bg-surface/80 p-6">
+                    <div className="border-b border-white/10 pb-4">
+                      <p className="text-sm uppercase tracking-[0.2em] text-orange-400">Handbuchseite</p>
+                      <h4 className="mt-2 text-2xl font-semibold text-white">{newPage.title || 'Unbenannte Seite'}</h4>
+                      {newPage.description ? <p className="mt-2 text-sm text-slate-300">{newPage.description}</p> : null}
+                    </div>
+
+                    <div className="mt-6 grid gap-6 md:grid-cols-4">
+                      {editorBlocks.map((block, index) => {
+                        const meta = parseBlockMeta(block.content || '');
+                        const blockColumns: BlockColumns = block.type === 'DIVIDER' ? 4 : meta.columns;
+                        const blockWidthClass = previewColumnClassMap[blockColumns];
+                        const imageHeightClass = previewImageHeightClassMap[meta.imageSize];
+
+                        if (block.type === 'TEXT') {
+                          return (
+                            <section key={`preview-${index}`} className={`rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm ${blockWidthClass}`}>
+                              <div dangerouslySetInnerHTML={{ __html: meta.content || '<p class="text-slate-400">Leerer Textblock</p>' }} />
+                            </section>
+                          );
+                        }
+
+                        if (block.type === 'IMAGE') {
+                          return (
+                            <section key={`preview-${index}`} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm ${blockWidthClass}`}>
+                              {meta.content ? (
+                                <img src={meta.content} alt={`Vorschau Bild ${index + 1}`} className={`w-full object-cover ${imageHeightClass}`} />
+                              ) : (
+                                <div className={`flex w-full items-center justify-center bg-black/40 text-sm text-slate-400 ${imageHeightClass}`}>Kein Bild ausgewählt</div>
+                              )}
+                            </section>
+                          );
+                        }
+
+                        if (block.type === 'VIDEO') {
+                          return (
+                            <section key={`preview-${index}`} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm ${blockWidthClass}`}>
+                              {meta.content ? (
+                                <div className="aspect-video overflow-hidden rounded-3xl bg-black">
+                                  <iframe
+                                    src={meta.content}
+                                    title={`Video Vorschau ${index + 1}`}
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    className="h-full w-full"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex aspect-video items-center justify-center rounded-3xl bg-black text-sm text-slate-400">
+                                  Kein Video-Link hinterlegt
+                                </div>
+                              )}
+                            </section>
+                          );
+                        }
+
+                        if (block.type === 'DIVIDER') {
+                          return <hr key={`preview-${index}`} className={`border-slate-700 ${blockWidthClass}`} />;
+                        }
+
+                        return null;
+                      })}
+                    </div>
+                  </div>
+                </div>
 
                 <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-black/50">
                   <div className="border-b border-white/10 bg-surface px-4 py-4 text-slate-300">Vorhandene Seiten</div>

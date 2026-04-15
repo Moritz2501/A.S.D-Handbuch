@@ -121,7 +121,17 @@ export async function DELETE(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { id } = await req.json();
+  let id = req.nextUrl.searchParams.get('id') || '';
+
+  if (!id) {
+    try {
+      const body = await req.json();
+      id = body?.id || '';
+    } catch {
+      id = '';
+    }
+  }
+
   if (!id) {
     return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 });
   }
