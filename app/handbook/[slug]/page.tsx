@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import Navbar from '@/app/components/Navbar';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 async function getPage(slug: string) {
   if (!prisma) return null;
   return prisma.handbookPage.findUnique({

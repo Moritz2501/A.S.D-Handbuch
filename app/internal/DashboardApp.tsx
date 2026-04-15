@@ -28,7 +28,7 @@ function simpleDate(value: string) {
 }
 
 export default function DashboardApp() {
-  const [activeTab, setActiveTab] = useState<'members' | 'training' | 'duty' | 'checks' | 'handbook'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'training' | 'duty' | 'checks' | 'handbook' | 'fortbildungen'>('members');
   const [members, setMembers] = useState<any[]>([]);
   const [trainings, setTrainings] = useState<any[]>([]);
   const [dutyTimes, setDutyTimes] = useState<any[]>([]);
@@ -44,6 +44,13 @@ export default function DashboardApp() {
   const [availableTrainings, setAvailableTrainings] = useState<any[]>([]);
   const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [editorBlocks, setEditorBlocks] = useState([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
+  const [trainingModalOpen, setTrainingModalOpen] = useState(false);
+  const [trainingModalMode, setTrainingModalMode] = useState<'add' | 'edit' | 'delete'>('add');
+  const [trainingModalTitle, setTrainingModalTitle] = useState('');
+  const [trainingModalOriginalTitle, setTrainingModalOriginalTitle] = useState('');
+  const [dutyModalOpen, setDutyModalOpen] = useState(false);
+  const [pageModalOpen, setPageModalOpen] = useState(false);
+  const [modalCategory, setModalCategory] = useState<'ausbildung' | 'fortbildung'>('ausbildung');
 
   useEffect(() => {
     async function load() {
@@ -68,24 +75,22 @@ export default function DashboardApp() {
     load();
   }, []);
 
+  const sortedMembers = useMemo(() => {
+    const rankOrder = ['ASD_Director', 'ASD_Co_Director', 'Flight_Instructor', 'Senior_Flight_Officer', 'Flight_Officer', 'Flight_Student'];
+    return [...members].sort((a, b) => {
+      const rankA = rankOrder.indexOf(a.rank);
+      const rankB = rankOrder.indexOf(b.rank);
+      if (rankA !== rankB) return rankA - rankB;
+      return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+    });
+  }, [members]);
+
   const officerMembers = useMemo(
-    () => members
-      .filter((member) => !['Flight_Student', 'ASD_Director', 'ASD_Co_Director'].includes(member.rank))
-      .sort((a, b) => {
-        // Sortiere nach Rang-Hierarchie
-        const rankOrder = ['Flight_Instructor', 'Senior_Flight_Officer', 'Flight_Officer'];
-        const aRankIndex = rankOrder.indexOf(a.rank);
-        const bRankIndex = rankOrder.indexOf(b.rank);
-        if (aRankIndex !== bRankIndex) {
-          return aRankIndex - bRankIndex;
-        }
-        // Dann nach joinedAt (älteste zuerst)
-        return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
-      }),
-    [members]
+    () => sortedMembers.filter((member) => ['Flight_Officer', 'Senior_Flight_Officer', 'Flight_Instructor'].includes(member.rank)),
+    [sortedMembers]
   );
-  const studentMembers = useMemo(() => members.filter((member) => member.rank === 'Flight_Student'), [members]);
-  const directorMembers = useMemo(() => members.filter((member) => ['ASD_Director', 'ASD_Co_Director'].includes(member.rank)), [members]);
+  const studentMembers = useMemo(() => sortedMembers.filter((member) => member.rank === 'Flight_Student'), [sortedMembers]);
+  const directorMembers = useMemo(() => sortedMembers.filter((member) => ['ASD_Director', 'ASD_Co_Director'].includes(member.rank)), [sortedMembers]);
 
   async function refreshData() {
     try {
@@ -143,6 +148,20 @@ export default function DashboardApp() {
       await refreshData();
     } catch (err) {
       setError('Dienstzeit konnte nicht gespeichert werden');
+    }
+  }
+
+  async function handleDeleteDuty(id: string) {
+    if (!confirm('Dienstzeit wirklich löschen?')) return;
+    try {
+      await fetch('/api/duty-times', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Dienstzeit konnte nicht gelöscht werden');
     }
   }
 
@@ -289,7 +308,7 @@ export default function DashboardApp() {
         <div className="mt-8 grid gap-6 xl:grid-cols-[240px_1fr]">
           <aside className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
             <div className="space-y-2">
-              {['members', 'training', 'duty', 'checks', 'handbook'].map((tab) => (
+              {['members', 'training', 'fortbildungen', 'duty', 'checks', 'handbook'].map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -298,6 +317,7 @@ export default function DashboardApp() {
                 >
                   {tab === 'members' && 'Mitglieder'}
                   {tab === 'training' && 'Ausbildung'}
+                  {tab === 'fortbildungen' && 'Fortbildungen'}
                   {tab === 'duty' && 'Dienstzeiten'}
                   {tab === 'checks' && 'Flugüberprüfungen'}
                   {tab === 'handbook' && 'Handbuch Verwaltung'}
@@ -396,274 +416,204 @@ export default function DashboardApp() {
 
             {!loading && activeTab === 'training' && (
               <section className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-semibold">Ausbildung</h2>
-                    <p className="mt-2 text-slate-400">Verwalte Ausbildungen und schließe Trainings ab.</p>
+                    <p className="mt-2 text-slate-400">Verwalte die Ausbildungsliste und hake Trainings direkt ab.</p>
                   </div>
-                  <button
-                    onClick={handleAutoPromote}
-                    className="rounded-2xl bg-green-500 px-4 py-2 text-black transition hover:bg-green-400"
-                  >
-                    Auto-Beförderung
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalCategory('ausbildung');
+                        setTrainingModalMode('add');
+                        setTrainingModalTitle('');
+                        setTrainingModalOriginalTitle('');
+                        setTrainingModalOpen(true);
+                      }}
+                      className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                    >
+                      Ausbildung verwalten
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAutoPromote}
+                      className="rounded-2xl bg-green-500 px-4 py-2 text-black transition hover:bg-green-400"
+                    >
+                      Auto-Beförderung
+                    </button>
+                  </div>
                 </div>
 
-                {/* Ausbildungs-Management */}
                 <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
-                  <h3 className="text-lg font-semibold text-white mb-4">Verfügbare Ausbildungen</h3>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <h3 className="text-lg font-semibold text-white">Verfügbare Ausbildungstitel</h3>
+                    <span className="text-sm text-slate-400">Editiere Titel im Popup</span>
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {availableTrainings.map((training) => (
-                      <div key={training.title} className="rounded-2xl border border-white/10 bg-surface p-3">
-                        <div className="flex items-center justify-between">
+                      <div key={training.title} className="rounded-2xl border border-white/10 bg-surface p-4">
+                        <div className="flex items-center justify-between gap-4">
                           <span className="text-white">{training.title}</span>
                           <div className="flex gap-2">
                             <button
+                              type="button"
                               onClick={() => {
-                                const newTitle = prompt('Neuer Name:', training.title);
-                                if (newTitle && newTitle !== training.title) {
-                                  handleRenameTraining(training.title, newTitle);
-                                }
+                                setModalCategory('ausbildung');
+                                setTrainingModalMode('edit');
+                                setTrainingModalTitle(training.title);
+                                setTrainingModalOriginalTitle(training.title);
+                                setTrainingModalOpen(true);
                               }}
-                              className="text-blue-400 hover:text-blue-300"
+                              className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
                             >
-                              ✏️
+                              Bearbeiten
                             </button>
                             <button
-                              onClick={() => handleDeleteTraining(training.title)}
-                              className="text-red-400 hover:text-red-300"
+                              type="button"
+                              onClick={() => {
+                                setModalCategory('ausbildung');
+                                setTrainingModalMode('delete');
+                                setTrainingModalOriginalTitle(training.title);
+                                setTrainingModalOpen(true);
+                              }}
+                              className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
                             >
-                              🗑️
+                              Löschen
                             </button>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <form onSubmit={(e) => { e.preventDefault(); handleAddTraining(); }} className="mt-4 flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Neue Ausbildung hinzufügen..."
-                      value={newTrainingTitle}
-                      onChange={(e) => setNewTrainingTitle(e.target.value)}
-                      className="flex-1 rounded-2xl border border-white/10 bg-black/70 px-4 py-2 text-white outline-none"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
-                    >
-                      Hinzufügen
-                    </button>
-                  </form>
                 </div>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-3xl border border-white/10 bg-black/50 p-4">
-                    <h3 className="text-lg font-semibold text-white">Flight Students</h3>
-                    <div className="mt-4 space-y-3">
-                      {studentMembers.map((member) => (
-                        <div key={member.id} className="rounded-2xl border border-white/10 bg-surface p-3">
-                          <p className="font-medium text-white">{member.name}</p>
-                          <p className="text-sm text-slate-400">{member.rank.replaceAll('_', ' ')}</p>
-                          <div className="mt-2 space-y-1">
+                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
+                  <h3 className="text-lg font-semibold text-white mb-4">Flight Students</h3>
+                  <div className="space-y-4">
+                    {studentMembers.map((member) => (
+                      <div key={member.id} className="rounded-2xl border border-white/10 bg-surface p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-medium text-white">{member.name}</p>
+                            <p className="text-sm text-slate-400">{member.rank.replaceAll('_', ' ')}</p>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
                             {trainings
                               .filter((t) => t.memberId === member.id)
                               .map((training) => (
-                                <div key={training.id} className="flex items-center gap-2">
-                                  <button
-                                    onClick={async () => {
-                                      await fetch('/api/trainings', {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ id: training.id, completed: !training.completed }),
-                                      });
-                                      await refreshData();
-                                    }}
-                                    className={`text-sm ${training.completed ? 'text-green-400' : 'text-slate-400'} hover:text-white`}
-                                  >
-                                    {training.completed ? '✅' : '⬜'} {training.title}
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  key={training.id}
+                                  onClick={async () => {
+                                    await fetch('/api/trainings', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: training.id, completed: !training.completed }),
+                                    });
+                                    await refreshData();
+                                  }}
+                                  className={`rounded-2xl px-3 py-2 text-left text-sm transition ${training.completed ? 'bg-green-500/15 text-green-300' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                                >
+                                  {training.completed ? '✅' : '⬜'} {training.title}
+                                </button>
                               ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-3xl border border-white/10 bg-black/50 p-4">
-                    <h3 className="text-lg font-semibold text-white">Officer Fortbildung</h3>
-                    <div className="mt-4 space-y-3">
-                      {officerMembers.map((member) => (
-                        <div key={member.id} className="rounded-2xl border border-white/10 bg-surface p-3">
-                          <p className="font-medium text-white">{member.name}</p>
-                          <p className="text-sm text-slate-400">{member.rank.replaceAll('_', ' ')}</p>
-                        </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              </section>
+            )}
 
-                <form onSubmit={handleTrainingSubmit} className="mt-6 grid gap-4 sm:grid-cols-4">
-                  <select
-                    value={trainingForm.memberId}
-                    onChange={(event) => setTrainingForm({ ...trainingForm, memberId: event.target.value })}
-                    className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                    required
+            {!loading && activeTab === 'fortbildungen' && (
+              <section className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Fortbildungen</h2>
+                    <p className="mt-2 text-slate-400">Verwalte Fortbildungen für Officer und Instructoren.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalCategory('fortbildung');
+                      setTrainingModalMode('add');
+                      setTrainingModalTitle('');
+                      setTrainingModalOriginalTitle('');
+                      setTrainingModalOpen(true);
+                    }}
+                    className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
                   >
-                    <option value="">Mitglied auswählen</option>
-                    {members
-                      .filter((member) => !['ASD_Director', 'ASD_Co_Director'].includes(member.rank))
-                      .map((member) => (
-                        <option key={member.id} value={member.id}>{member.name}</option>
-                      ))}
-                  </select>
-                  <select
-                    value={trainingForm.title}
-                    onChange={(event) => setTrainingForm({ ...trainingForm, title: event.target.value })}
-                    className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                  >
-                    {trainingOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                  <label className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={trainingForm.completed}
-                      onChange={(event) => setTrainingForm({ ...trainingForm, completed: event.target.checked })}
-                      className="h-4 w-4 rounded border-white/10 bg-black/70 text-orange-500"
-                    />
-                    Abgeschlossen
-                  </label>
-                  <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">Training hinzufügen</button>
-                </form>
+                    Fortbildung verwalten
+                  </button>
+                </div>
 
-                <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-black/50">
-                  <table className="min-w-full text-left text-sm text-slate-300">
-                    <thead className="border-b border-white/10 bg-surface text-slate-400">
-                      <tr>
-                        <th className="px-4 py-3">Name</th>
-                        <th className="px-4 py-3">Rang</th>
-                        <th className="px-4 py-3">Ausbildungen</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {members
-                      .filter((member) => !['ASD_Director', 'ASD_Co_Director'].includes(member.rank))
-                      .map((member) => (
-                        <tr key={member.id} className="border-b border-white/10 last:border-none">
-                          <td className="px-4 py-4 text-white">{member.name}</td>
-                          <td className="px-4 py-4 text-slate-300">{member.rank.replaceAll('_', ' ')}</td>
-                          <td className="px-4 py-4">
-                            {trainingOptions.map((title) => {
-                              const completed = trainings.some((training) => training.memberId === member.id && training.title === title && training.completed);
-                              return (
-                                <label key={title} className="mr-3 inline-flex items-center gap-2 text-sm text-slate-300">
-                                  <input
-                                    type="checkbox"
-                                    checked={completed}
-                                    readOnly
-                                    className="h-4 w-4 rounded border-white/10 bg-black/80 text-orange-500"
-                                  />
-                                  {title}
-                                </label>
-                              );
-                            })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {officerMembers.map((member) => (
+                    <div key={member.id} className="rounded-3xl border border-white/10 bg-black/50 p-4">
+                      <p className="font-medium text-white">{member.name}</p>
+                      <p className="text-sm text-slate-400 mb-3">{member.rank.replaceAll('_', ' ')}</p>
+                      <div className="grid gap-2">
+                        {trainings
+                          .filter((t) => t.memberId === member.id)
+                          .map((training) => (
+                            <button
+                              key={training.id}
+                              type="button"
+                              onClick={async () => {
+                                await fetch('/api/trainings', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: training.id, completed: !training.completed }),
+                                });
+                                await refreshData();
+                              }}
+                              className={`rounded-2xl px-3 py-2 text-left text-sm transition ${training.completed ? 'bg-green-500/15 text-green-300' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                            >
+                              {training.completed ? '✅' : '⬜'} {training.title}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
 
             {!loading && activeTab === 'duty' && (
               <section className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
-                <h2 className="text-2xl font-semibold">Dienstzeiten</h2>
-                <p className="mt-2 text-slate-400">Erfasse Arbeitsstunden oder markiere Urlaube.</p>
-                <form onSubmit={handleDutySubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <select
-                    value={dutyForm.memberId}
-                    onChange={(event) => setDutyForm({ ...dutyForm, memberId: event.target.value })}
-                    className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                    required
-                  >
-                    <option value="">Officer auswählen</option>
-                    {officerMembers.map((member) => (
-                      <option key={member.id} value={member.id}>{member.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    value={dutyForm.startDate}
-                    onChange={(event) => setDutyForm({ ...dutyForm, startDate: event.target.value })}
-                    className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                    required
-                  />
-                  <input
-                    type="date"
-                    value={dutyForm.endDate}
-                    onChange={(event) => setDutyForm({ ...dutyForm, endDate: event.target.value })}
-                    className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                    required
-                  />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={dutyForm.hours}
-                        onChange={(event) => setDutyForm({ ...dutyForm, hours: event.target.value })}
-                        className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                        placeholder="Stunden"
-                        disabled={dutyForm.isVacation}
-                      />
-                      <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={dutyForm.isVacation}
-                          onChange={(event) => setDutyForm({ ...dutyForm, isVacation: event.target.checked })}
-                          className="h-4 w-4 rounded border-white/10 bg-black/70 text-orange-500"
-                        />
-                        Urlaub
-                      </label>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={dutyForm.minutes}
-                      onChange={(event) => setDutyForm({ ...dutyForm, minutes: event.target.value })}
-                      className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                      placeholder="Minuten"
-                      disabled={dutyForm.isVacation}
-                    />
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Dienstzeiten</h2>
+                    <p className="mt-2 text-slate-400">Trage Dienstzeiten über das Pop-up ein und lösche alte Einträge direkt.</p>
                   </div>
-                  <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">Eintragen</button>
-                </form>
+                  <button
+                    type="button"
+                    onClick={() => setDutyModalOpen(true)}
+                    className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                  >
+                    Dienstzeit eintragen
+                  </button>
+                </div>
 
-                <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-black/50">
-                  <table className="min-w-full text-left text-sm text-slate-300">
-                    <thead className="border-b border-white/10 bg-surface text-slate-400">
-                      <tr>
-                        <th className="px-4 py-3">Name</th>
-                        <th className="px-4 py-3">Zeitraum</th>
-                        <th className="px-4 py-3">Stunden</th>
-                        <th className="px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dutyTimes.map((entry) => (
-                        <tr key={entry.id} className="border-b border-white/10 last:border-none">
-                          <td className="px-4 py-4 text-white">{entry.member?.name}</td>
-                          <td className="px-4 py-4 text-slate-300">{new Date(entry.startDate).toLocaleDateString('de-DE')} – {new Date(entry.endDate).toLocaleDateString('de-DE')}</td>
-                          <td className="px-4 py-4 text-slate-300">{entry.isVacation ? '0' : `${entry.hours}h ${entry.minutes}m`}</td>
-                          <td className="px-4 py-4 text-slate-300">{entry.isVacation ? 'Urlaub' : 'Gebucht'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="mt-6 grid gap-4">
+                  {dutyTimes.map((entry) => (
+                    <div key={entry.id} className="rounded-3xl border border-white/10 bg-black/50 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium text-white">{entry.member?.name}</p>
+                        <p className="text-sm text-slate-400">{new Date(entry.startDate).toLocaleDateString('de-DE')} – {new Date(entry.endDate).toLocaleDateString('de-DE')}</p>
+                        <p className="text-sm text-slate-400">{entry.isVacation ? 'Urlaub' : `${entry.hours}h ${entry.minutes}m`}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDuty(entry.id)}
+                        className="rounded-2xl border border-red-500/40 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
@@ -818,6 +768,133 @@ export default function DashboardApp() {
                   </div>
                 </div>
               </section>
+            )}
+
+            {trainingModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-semibold text-white">
+                      {trainingModalMode === 'add'
+                        ? `${modalCategory === 'fortbildung' ? 'Fortbildung' : 'Ausbildung'} hinzufügen`
+                        : trainingModalMode === 'edit'
+                        ? `${modalCategory === 'fortbildung' ? 'Fortbildung' : 'Ausbildung'} bearbeiten`
+                        : `${modalCategory === 'fortbildung' ? 'Fortbildung' : 'Ausbildung'} löschen`}
+                    </h3>
+                    <button onClick={() => setTrainingModalOpen(false)} className="text-slate-300 hover:text-white">Schließen</button>
+                  </div>
+                  <div className="mt-6 space-y-4">
+                    {(trainingModalMode === 'add' || trainingModalMode === 'edit') && (
+                      <input
+                        value={trainingModalTitle}
+                        onChange={(event) => setTrainingModalTitle(event.target.value)}
+                        placeholder={modalCategory === 'fortbildung' ? 'Fortbildungsname' : 'Ausbildungsname'}
+                        className="w-full rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                      />
+                    )}
+                    {trainingModalMode === 'delete' && (
+                      <p className="text-slate-300">Möchtest du die {modalCategory === 'fortbildung' ? 'Fortbildung' : 'Ausbildung'} "{trainingModalOriginalTitle}" wirklich löschen?</p>
+                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <button type="button" onClick={() => setTrainingModalOpen(false)} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-300 hover:bg-white/5">Abbrechen</button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (trainingModalMode === 'add') {
+                            if (!trainingModalTitle.trim()) return;
+                            await fetch('/api/trainings/manage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: trainingModalTitle }) });
+                          }
+                          if (trainingModalMode === 'edit') {
+                            if (!trainingModalTitle.trim()) return;
+                            await fetch('/api/trainings/manage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldTitle: trainingModalOriginalTitle, newTitle: trainingModalTitle }) });
+                          }
+                          if (trainingModalMode === 'delete') {
+                            await fetch('/api/trainings/manage', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: trainingModalOriginalTitle }) });
+                          }
+                          setTrainingModalOpen(false);
+                          await refreshData();
+                        }}
+                        className="rounded-2xl bg-orange-500 px-4 py-3 text-black text-sm transition hover:bg-orange-400"
+                      >
+                        {trainingModalMode === 'delete' ? 'Löschen' : 'Speichern'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {dutyModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-semibold text-white">Dienstzeit eintragen</h3>
+                    <button onClick={() => setDutyModalOpen(false)} className="text-slate-300 hover:text-white">Schließen</button>
+                  </div>
+                  <form className="mt-6 grid gap-4" onSubmit={async (event) => {
+                    event.preventDefault();
+                    await handleDutySubmit(event as any);
+                    setDutyModalOpen(false);
+                  }}>
+                    <select
+                      value={dutyForm.memberId}
+                      onChange={(event) => setDutyForm({ ...dutyForm, memberId: event.target.value })}
+                      className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                      required
+                    >
+                      <option value="">Officer auswählen</option>
+                      {officerMembers.map((member) => (
+                        <option key={member.id} value={member.id}>{member.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={dutyForm.startDate}
+                      onChange={(event) => setDutyForm({ ...dutyForm, startDate: event.target.value })}
+                      className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                      required
+                    />
+                    <input
+                      type="date"
+                      value={dutyForm.endDate}
+                      onChange={(event) => setDutyForm({ ...dutyForm, endDate: event.target.value })}
+                      className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                      required
+                    />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={dutyForm.hours}
+                        onChange={(event) => setDutyForm({ ...dutyForm, hours: event.target.value })}
+                        className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                        placeholder="Stunden"
+                        disabled={dutyForm.isVacation}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={dutyForm.minutes}
+                        onChange={(event) => setDutyForm({ ...dutyForm, minutes: event.target.value })}
+                        className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                        placeholder="Minuten"
+                        disabled={dutyForm.isVacation}
+                      />
+                    </div>
+                    <label className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={dutyForm.isVacation}
+                        onChange={(event) => setDutyForm({ ...dutyForm, isVacation: event.target.checked })}
+                        className="h-4 w-4 rounded border-white/10 bg-black/70 text-orange-500"
+                      />
+                      Urlaub
+                    </label>
+                    <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">Speichern</button>
+                  </form>
+                </div>
+              </div>
             )}
           </div>
         </div>

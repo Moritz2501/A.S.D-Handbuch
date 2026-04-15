@@ -31,3 +31,18 @@ export async function POST(req: NextRequest) {
   });
   return NextResponse.json(dutyTime);
 }
+
+export async function DELETE(req: NextRequest) {
+  if (!(await isAuthenticated(req))) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+  if (!prisma) {
+    return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  const { id } = await req.json();
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 });
+  }
+  await prisma.dutyTime.delete({ where: { id } });
+  return NextResponse.json({ message: 'Dienstzeit gelöscht' });
+}

@@ -20,14 +20,14 @@ export async function POST(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { title, description, published } = await req.json();
+  const { title, description, published, blocks } = await req.json();
 
   // Slug automatisch aus Titel generieren
   const slug = title
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '') // Entferne Sonderzeichen
-    .replace(/\s+/g, '-') // Leerzeichen zu Bindestrichen
-    .replace(/-+/g, '-') // Mehrere Bindestriche zu einem
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
     .trim();
 
   const page = await prisma.handbookPage.create({
@@ -36,7 +36,15 @@ export async function POST(req: NextRequest) {
       slug,
       description,
       published: Boolean(published),
+      blocks: {
+        create: blocks?.map((block: any, index: number) => ({
+          type: block.type,
+          content: block.content,
+          order: index,
+        })) || [],
+      },
     },
+    include: { blocks: { orderBy: { order: 'asc' } } },
   });
   return NextResponse.json(page);
 }
@@ -48,10 +56,18 @@ export async function PATCH(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { id, title, description, slug, published, blocks } = await req.json();
+  const { id, title, description, published, blocks } = await req.json();
   if (!id) {
     return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 });
   }
+
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+
   const page = await prisma.handbookPage.update({
     where: { id },
     data: {
@@ -71,4 +87,19 @@ export async function PATCH(req: NextRequest) {
     include: { blocks: { orderBy: { order: 'asc' } } },
   });
   return NextResponse.json(page);
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!(await isAuthenticated(req))) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+  if (!prisma) {
+    return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  const { id } = await req.json();
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 });
+  }
+  await prisma.handbookPage.delete({ where: { id } });
+  return NextResponse.json({ message: 'Seite gelöscht' });
 }
