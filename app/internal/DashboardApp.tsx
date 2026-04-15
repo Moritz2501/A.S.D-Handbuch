@@ -51,6 +51,8 @@ export default function DashboardApp() {
   const [dutyModalOpen, setDutyModalOpen] = useState(false);
   const [pageModalOpen, setPageModalOpen] = useState(false);
   const [modalCategory, setModalCategory] = useState<'ausbildung' | 'fortbildung'>('ausbildung');
+  const [showAvailableAusbildungen, setShowAvailableAusbildungen] = useState(false);
+  const [showAvailableFortbildungen, setShowAvailableFortbildungen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -76,6 +78,11 @@ export default function DashboardApp() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    setShowAvailableAusbildungen(false);
+    setShowAvailableFortbildungen(false);
+  }, [activeTab]);
 
   const sortedMembers = useMemo(() => {
     const rankOrder = ['ASD_Director', 'ASD_Co_Director', 'Flight_Instructor', 'Senior_Flight_Officer', 'Flight_Officer', 'Flight_Student'];
@@ -200,6 +207,24 @@ export default function DashboardApp() {
     }
   }
 
+  async function handleDemoteMember(memberId: string, newRank: string) {
+    try {
+      const response = await fetch('/api/members/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, newRank }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        setError(error.error || 'Downrank fehlgeschlagen');
+        return;
+      }
+      await refreshData();
+    } catch (err) {
+      setError('Downrank fehlgeschlagen');
+    }
+  }
+
   async function handleAutoPromote() {
     try {
       await fetch('/api/members/promote', { method: 'PUT' });
@@ -258,6 +283,14 @@ export default function DashboardApp() {
       description: page.description || '',
       published: page.published,
     });
+    setEditorBlocks(
+      page.blocks?.length
+        ? page.blocks.map((block: any) => ({
+            type: block.type,
+            content: block.content,
+          }))
+        : [{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]
+    );
   }
 
   function cancelEditing() {
@@ -403,6 +436,20 @@ export default function DashboardApp() {
                                   Uprank
                                 </button>
                               )}
+                              {member.rank !== 'Flight_Student' && (
+                                <button
+                                  onClick={() => {
+                                    const currentIndex = rankHierarchy.indexOf(member.rank);
+                                    const prevRank = rankHierarchy[currentIndex - 1];
+                                    if (prevRank) {
+                                      handleDemoteMember(member.id, prevRank);
+                                    }
+                                  }}
+                                  className="rounded-2xl border border-yellow-500/40 px-3 py-2 text-sm text-yellow-300 transition hover:bg-yellow-500/10"
+                                >
+                                  Downrank
+                                </button>
+                              )}
                               <button onClick={() => handleDeleteMember(member.id)} className="rounded-2xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10">
                                 Entfernen
                               </button>
@@ -432,6 +479,8 @@ export default function DashboardApp() {
                         setTrainingModalTitle('');
                         setTrainingModalOriginalTitle('');
                         setTrainingModalOpen(true);
+                        setShowAvailableAusbildungen(true);
+                        setShowAvailableFortbildungen(false);
                       }}
                       className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
                     >
@@ -447,16 +496,17 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <h3 className="text-lg font-semibold text-white">Verfügbare Ausbildungstitel</h3>
-                    <span className="text-sm text-slate-400">Editiere Titel im Popup</span>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {availableTrainings
-                      .filter((training) => training.category === 'AUSBILDUNG')
-                      .map((training) => (
-                        <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
+                {showAvailableAusbildungen ? (
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <h3 className="text-lg font-semibold text-white">Verfügbare Ausbildungstitel</h3>
+                      <span className="text-sm text-slate-400">Editiere Titel im Popup</span>
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {availableTrainings
+                        .filter((training) => training.category === 'AUSBILDUNG')
+                        .map((training) => (
+                          <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <span className="text-white">{training.title}</span>
@@ -492,8 +542,13 @@ export default function DashboardApp() {
                           </div>
                         </div>
                       ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/40 p-4 text-slate-300">
+                    Drücke "Ausbildung verwalten", um verfügbare Ausbildungstitel zu sehen.
+                  </div>
+                )}
 
                 <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
                   <h3 className="text-lg font-semibold text-white mb-4">Flight Students</h3>
@@ -549,6 +604,8 @@ export default function DashboardApp() {
                       setTrainingModalTitle('');
                       setTrainingModalOriginalTitle('');
                       setTrainingModalOpen(true);
+                      setShowAvailableFortbildungen(true);
+                      setShowAvailableAusbildungen(false);
                     }}
                     className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
                   >
@@ -556,52 +613,56 @@ export default function DashboardApp() {
                   </button>
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">Verfügbare Fortbildungstitel</h3>
-                      <p className="text-sm text-slate-400">Verwalte Fortbildungen separat</p>
+                {showAvailableFortbildungen ? (
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Verfügbare Fortbildungstitel</h3>
+                        <p className="text-sm text-slate-400">Verwalte Fortbildungen separat</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {availableTrainings
-                      .filter((training) => training.category === 'FORTBILDUNG')
-                      .map((training) => (
-                        <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-white">{training.title}</span>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalCategory('fortbildung');
-                                  setTrainingModalMode('edit');
-                                  setTrainingModalTitle(training.title);
-                                  setTrainingModalOriginalTitle(training.title);
-                                  setTrainingModalOpen(true);
-                                }}
-                                className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
-                              >
-                                Bearbeiten
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalCategory('fortbildung');
-                                  setTrainingModalMode('delete');
-                                  setTrainingModalOriginalTitle(training.title);
-                                  setTrainingModalOpen(true);
-                                }}
-                                className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
-                              >
-                                Löschen
-                              </button>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {availableTrainings
+                        .filter((training) => training.category === 'FORTBILDUNG')
+                        .map((training) => (
+                          <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-white">{training.title}</span>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModalCategory('fortbildung');
+                                    setTrainingModalMode('edit');
+                                    setTrainingModalTitle(training.title);
+                                    setTrainingModalOriginalTitle(training.title);
+                                    setTrainingModalOpen(true);
+                                  }}
+                                  className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
+                                >
+                                  Bearbeiten
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModalCategory('fortbildung');
+                                    setTrainingModalMode('delete');
+                                    setTrainingModalOriginalTitle(training.title);
+                                    setTrainingModalOpen(true);
+                                  }}
+                                  className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
+                                >
+                                  Löschen
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/40 p-4 text-slate-300">Drücke "Fortbildung verwalten", um verfügbare Fortbildungstitel zu sehen.</div>
+                )}
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   {officerMembers.map((member) => (
