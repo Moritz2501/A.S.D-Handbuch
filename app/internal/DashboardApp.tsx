@@ -44,6 +44,7 @@ export default function DashboardApp() {
   const [availableTrainings, setAvailableTrainings] = useState<any[]>([]);
   const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [editorBlocks, setEditorBlocks] = useState([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
+  const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
   const [trainingModalMode, setTrainingModalMode] = useState<'add' | 'edit' | 'delete'>('add');
@@ -349,6 +350,44 @@ export default function DashboardApp() {
 
   function handleBlockChange(index: number, key: string, value: string) {
     setEditorBlocks((current) => current.map((block, idx) => (idx === index ? { ...block, [key]: value } : block)));
+  }
+
+  function moveBlock(index: number, direction: 'up' | 'down') {
+    setEditorBlocks((current) => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  }
+
+  function handleBlockDragStart(index: number) {
+    setDraggedBlockIndex(index);
+  }
+
+  function handleBlockDrop(targetIndex: number) {
+    setEditorBlocks((current) => {
+      if (draggedBlockIndex === null || draggedBlockIndex === targetIndex) return current;
+      const next = [...current];
+      const [moved] = next.splice(draggedBlockIndex, 1);
+      const insertIndex = draggedBlockIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      next.splice(insertIndex, 0, moved);
+      return next;
+    });
+    setDraggedBlockIndex(null);
+  }
+
+  function handleBlockDragEnd() {
+    setDraggedBlockIndex(null);
+  }
+
+  function applyTextCommand(index: number, command: string, value?: string) {
+    const editor = document.querySelector(`[data-block-editor="${index}"]`) as HTMLDivElement | null;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    handleBlockChange(index, 'content', editor.innerHTML);
   }
 
   function addBlock(type: string) {
@@ -911,19 +950,135 @@ export default function DashboardApp() {
                   </div>
                   <div className="space-y-4">
                     {editorBlocks.map((block, index) => (
-                      <div key={`${block.type}-${index}`} className="rounded-3xl border border-white/10 bg-black/70 p-4">
+                      <div
+                        key={`${block.type}-${index}`}
+                        draggable
+                        onDragStart={() => handleBlockDragStart(index)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handleBlockDrop(index)}
+                        onDragEnd={handleBlockDragEnd}
+                        className={`rounded-3xl border bg-black/70 p-4 ${draggedBlockIndex === index ? 'border-orange-400/60' : 'border-white/10'}`}
+                      >
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-sm font-semibold text-white">{block.type}</span>
-                          <button
-                            type="button"
-                            onClick={() => setEditorBlocks((current) => current.filter((_, idx) => idx !== index))}
-                            className="text-sm text-orange-300 hover:text-orange-100"
-                          >
-                            Entfernen
-                          </button>
+                          <span className="text-sm font-semibold text-white">{block.type} <span className="text-xs font-normal text-slate-400">(ziehen zum Umsortieren)</span></span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => moveBlock(index, 'up')}
+                              disabled={index === 0}
+                              className="rounded-xl border border-white/10 px-2 py-1 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Hoch
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveBlock(index, 'down')}
+                              disabled={index === editorBlocks.length - 1}
+                              className="rounded-xl border border-white/10 px-2 py-1 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Runter
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditorBlocks((current) => current.filter((_, idx) => idx !== index))}
+                              className="text-sm text-orange-300 hover:text-orange-100"
+                            >
+                              Entfernen
+                            </button>
+                          </div>
                         </div>
                         {block.type !== 'DIVIDER' ? (
-                          block.type === 'IMAGE' ? (
+                          block.type === 'TEXT' ? (
+                            <div className="mt-3 space-y-3">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'bold')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Fett
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'italic')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Kursiv
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'underline')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Unterstrichen
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'insertOrderedList')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  1. 2. 3.
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'insertUnorderedList')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Stichpunkte
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'formatBlock', '<h1>')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Groß
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'formatBlock', '<h3>')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Mittel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'formatBlock', '<p>')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Normal
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'decreaseFontSize')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Klein
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'increaseFontSize')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Größer
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyTextCommand(index, 'removeFormat')}
+                                  className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                >
+                                  Format löschen
+                                </button>
+                              </div>
+                              <div
+                                data-block-editor={index}
+                                contentEditable
+                                suppressContentEditableWarning
+                                onInput={(event) => handleBlockChange(index, 'content', event.currentTarget.innerHTML)}
+                                className="min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
+                                dangerouslySetInnerHTML={{ __html: block.content }}
+                              />
+                            </div>
+                          ) : block.type === 'IMAGE' ? (
                             <div className="mt-3 space-y-3">
                               <label className="block text-sm font-medium text-slate-300">Bild aus dem Explorer auswählen</label>
                               <input
@@ -944,6 +1099,7 @@ export default function DashboardApp() {
                               ) : (
                                 <p className="text-sm text-slate-400">Wähle ein Bild aus und speichere die Seite. Kein Link erforderlich.</p>
                               )}
+                              {isUploadingImage && <p className="text-sm text-orange-300">Bild wird hochgeladen ...</p>}
                             </div>
                           ) : (
                             <textarea
