@@ -132,12 +132,28 @@ function RichHtmlEditor({
     }
   }, [value]);
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return;
+
+    event.preventDefault();
+
+    if (event.shiftKey) {
+      document.execCommand('outdent');
+      onChange(event.currentTarget.innerHTML);
+      return;
+    }
+
+    document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    onChange(event.currentTarget.innerHTML);
+  }
+
   return (
     <div
       data-block-editor={editorId}
       ref={editorRef}
       contentEditable
       suppressContentEditableWarning
+      onKeyDown={handleKeyDown}
       onInput={(event) => onChange(event.currentTarget.innerHTML)}
       className="handbook-richtext min-h-[160px] w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
     />
