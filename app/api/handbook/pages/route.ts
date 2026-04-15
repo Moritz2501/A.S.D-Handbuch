@@ -7,7 +7,7 @@ export async function GET() {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
   const pages = await prisma.handbookPage.findMany({
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ pageOrder: 'asc' }, { updatedAt: 'desc' }],
     include: { blocks: { orderBy: { order: 'asc' } } },
   });
   return NextResponse.json(pages);
@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
   const { title, description, published, blocks } = await req.json();
+
+  const maxOrder = await prisma.handbookPage.aggregate({
+    _max: { pageOrder: true },
+  });
+  const nextOrder = (maxOrder._max.pageOrder ?? -1) + 1;
 
   // Slug automatisch aus Titel generieren
   const slug = title
@@ -36,6 +41,7 @@ export async function POST(req: NextRequest) {
       slug,
       description,
       published: Boolean(published),
+      pageOrder: nextOrder,
       blocks: {
         create: blocks?.map((block: any, index: number) => ({
           type: block.type,
@@ -56,7 +62,26 @@ export async function PATCH(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { id, title, description, published, blocks } = await req.json();
+  const db = prisma;
+  const { id, title, description, published, blocks, pageOrderIds } = await req.json();
+
+  if (Array.isArray(pageOrderIds)) {
+    await prisma.$transaction(
+      pageOrderIds.map((pageId: string, index: number) =>
+        db.handbookPage.update({
+          where: { id: pageId },
+          data: { pageOrder: index },
+        })
+      )
+    );
+
+    const pages = await db.handbookPage.findMany({
+      orderBy: [{ pageOrder: 'asc' }, { updatedAt: 'desc' }],
+      include: { blocks: { orderBy: { order: 'asc' } } },
+    });
+    return NextResponse.json(pages);
+  }
+
   if (!id) {
     return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400 });
   }
@@ -68,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     .replace(/-+/g, '-')
     .trim();
 
-  const page = await prisma.handbookPage.update({
+  const page = await db.handbookPage.update({
     where: { id },
     data: {
       title,

@@ -14,7 +14,7 @@ async function getPage(slug: string) {
 
 async function getPages() {
   if (!prisma) return [];
-  return prisma.handbookPage.findMany({ where: { published: true }, orderBy: { updatedAt: 'desc' } });
+  return prisma.handbookPage.findMany({ where: { published: true }, orderBy: [{ pageOrder: 'asc' }, { updatedAt: 'desc' }] });
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

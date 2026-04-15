@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 async function getPages() {
   if (!prisma) return [];
-  return prisma.handbookPage.findMany({ where: { published: true }, orderBy: { updatedAt: 'desc' } });
+  return prisma.handbookPage.findMany({ where: { published: true }, orderBy: [{ pageOrder: 'asc' }, { updatedAt: 'desc' }] });
 }
 
 export default async function HandbookIndexPage() {

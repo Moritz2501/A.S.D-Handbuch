@@ -278,6 +278,28 @@ export default function DashboardApp() {
     }
   }
 
+  async function handleMoveHandbookPage(pageId: string, direction: 'up' | 'down') {
+    const currentIndex = pages.findIndex((page) => page.id === pageId);
+    if (currentIndex < 0) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= pages.length) return;
+
+    const reordered = [...pages];
+    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+
+    try {
+      await fetch('/api/handbook/pages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageOrderIds: reordered.map((page) => page.id) }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Seitenreihenfolge konnte nicht gespeichert werden');
+    }
+  }
+
   function startEditingPage(page: any) {
     setEditingPage(page);
     setNewPage({
@@ -862,20 +884,38 @@ export default function DashboardApp() {
                 <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
                   <h3 className="text-lg font-semibold text-white mb-4">Vorhandene Seiten</h3>
                   <div className="space-y-3">
-                    {pages.map((page) => (
+                    {pages.map((page, index) => (
                       <div key={page.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface p-3">
                         <div>
-                          <p className="font-medium text-white">{page.title}</p>
+                          <p className="font-medium text-white">{index + 1}. {page.title}</p>
                           <p className="text-sm text-slate-400">/{page.slug} • {page.published ? 'Veröffentlicht' : 'Entwurf'}</p>
                         </div>
                         <div className="flex gap-2">
                           <button
+                            type="button"
+                            onClick={() => handleMoveHandbookPage(page.id, 'up')}
+                            disabled={index === 0}
+                            className="rounded-2xl border border-white/20 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Hoch
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveHandbookPage(page.id, 'down')}
+                            disabled={index === pages.length - 1}
+                            className="rounded-2xl border border-white/20 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Runter
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => startEditingPage(page)}
                             className="rounded-2xl border border-blue-500/40 px-3 py-2 text-sm text-blue-300 transition hover:bg-blue-500/10"
                           >
                             Bearbeiten
                           </button>
                           <button
+                            type="button"
                             onClick={async () => {
                               if (confirm(`"${page.title}" wirklich löschen?`)) {
                                 await fetch(`/api/handbook/pages?id=${page.id}`, { method: 'DELETE' });
