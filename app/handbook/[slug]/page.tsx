@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 export const dynamic = 'force-dynamic';
 
 type BlockColumns = 1 | 2 | 3 | 4;
-type ImageSize = 'small' | 'medium' | 'large';
+type ImageSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 const columnClassMap: Record<BlockColumns, string> = {
   1: 'md:col-span-1',
@@ -18,15 +18,17 @@ const imageHeightClassMap: Record<ImageSize, string> = {
   small: 'h-52 md:h-56',
   medium: 'h-64 md:h-72',
   large: 'h-80 md:h-96',
+  xlarge: 'h-[28rem] md:h-[40rem]',
 };
 
-function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; content: string } {
+function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; imageHeight: number | null; content: string } {
   let rawContent = content || '';
   let columns: BlockColumns = 4;
   let imageSize: ImageSize = 'medium';
+  let imageHeight: number | null = null;
 
   while (true) {
-    const match = rawContent.match(/^\[\[(layout|cols|imgSize):(full|half|1|2|3|4|small|medium|large)\]\]/);
+    const match = rawContent.match(/^\[\[([a-zA-Z]+):([^\]]+)\]\]/);
     if (!match) break;
 
     const [, key, value] = match;
@@ -39,14 +41,20 @@ function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: Im
         columns = parsed as BlockColumns;
       }
     }
-    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large')) {
+    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large' || value === 'xlarge')) {
       imageSize = value;
+    }
+    if (key === 'imgHeight') {
+      const parsedHeight = Number(value);
+      if (Number.isFinite(parsedHeight) && parsedHeight >= 160 && parsedHeight <= 900) {
+        imageHeight = Math.round(parsedHeight);
+      }
     }
 
     rawContent = rawContent.slice(match[0].length);
   }
 
-  return { columns, imageSize, content: rawContent };
+  return { columns, imageSize, imageHeight, content: rawContent };
 }
 
 async function getPage(slug: string) {
@@ -133,6 +141,7 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                 const blockColumns: BlockColumns = block.type === 'DIVIDER' ? 4 : parsedBlock.columns;
                 const blockWidthClass = columnClassMap[blockColumns];
                 const imageHeightClass = imageHeightClassMap[parsedBlock.imageSize];
+                const imageHeightStyle = parsedBlock.imageHeight !== null ? { height: `${parsedBlock.imageHeight}px` } : undefined;
 
                 if (block.type === 'TEXT') {
                   return (
@@ -144,7 +153,12 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                 if (block.type === 'IMAGE') {
                   return (
                     <section key={block.id} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm ${blockWidthClass}`}>
-                      <img src={parsedBlock.content} alt="Handbuch Bild" className={`w-full object-cover ${imageHeightClass}`} />
+                      <img
+                        src={parsedBlock.content}
+                        alt="Handbuch Bild"
+                        className={`w-full object-cover ${parsedBlock.imageHeight !== null ? '' : imageHeightClass}`}
+                        style={imageHeightStyle}
+                      />
                     </section>
                   );
                 }

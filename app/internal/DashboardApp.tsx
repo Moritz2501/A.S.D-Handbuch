@@ -24,16 +24,17 @@ const rankHierarchy = [
 const trainingOptions = ['Basic Flight Training', 'Advanced Navigation', 'Emergency Response'];
 
 type BlockColumns = 1 | 2 | 3 | 4;
-type ImageSize = 'small' | 'medium' | 'large';
+type ImageSize = 'small' | 'medium' | 'large' | 'xlarge';
 
-function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; content: string } {
+function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: ImageSize; imageHeight: number | null; content: string } {
   let rawContent = content || '';
   let columns: BlockColumns = 4;
   let imageSize: ImageSize = 'medium';
+  let imageHeight: number | null = null;
 
   // Alte und neue Präfixe am Anfang des Inhalts unterstützen.
   while (true) {
-    const match = rawContent.match(/^\[\[(layout|cols|imgSize):(full|half|1|2|3|4|small|medium|large)\]\]/);
+    const match = rawContent.match(/^\[\[([a-zA-Z]+):([^\]]+)\]\]/);
     if (!match) break;
 
     const [, key, value] = match;
@@ -46,17 +47,23 @@ function parseBlockMeta(content: string): { columns: BlockColumns; imageSize: Im
         columns = parsed as BlockColumns;
       }
     }
-    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large')) {
+    if (key === 'imgSize' && (value === 'small' || value === 'medium' || value === 'large' || value === 'xlarge')) {
       imageSize = value;
+    }
+    if (key === 'imgHeight') {
+      const parsedHeight = Number(value);
+      if (Number.isFinite(parsedHeight) && parsedHeight >= 160 && parsedHeight <= 900) {
+        imageHeight = Math.round(parsedHeight);
+      }
     }
 
     rawContent = rawContent.slice(match[0].length);
   }
 
-  return { columns, imageSize, content: rawContent };
+  return { columns, imageSize, imageHeight, content: rawContent };
 }
 
-function buildBlockContent(rawContent: string, columns: BlockColumns, imageSize: ImageSize): string {
+function buildBlockContent(rawContent: string, columns: BlockColumns, imageSize: ImageSize, imageHeight: number | null): string {
   const cleanContent = rawContent || '';
   const prefixes: string[] = [];
 
@@ -65,6 +72,9 @@ function buildBlockContent(rawContent: string, columns: BlockColumns, imageSize:
   }
   if (imageSize !== 'medium') {
     prefixes.push(`[[imgSize:${imageSize}]]`);
+  }
+  if (imageHeight !== null) {
+    prefixes.push(`[[imgHeight:${imageHeight}]]`);
   }
 
   return `${prefixes.join('')}${cleanContent}`;
@@ -82,6 +92,10 @@ function getBlockImageSize(content: string): ImageSize {
   return parseBlockMeta(content).imageSize;
 }
 
+function getBlockImageHeight(content: string): number | null {
+  return parseBlockMeta(content).imageHeight;
+}
+
 const previewColumnClassMap: Record<BlockColumns, string> = {
   1: 'md:col-span-1',
   2: 'md:col-span-2',
@@ -93,6 +107,7 @@ const previewImageHeightClassMap: Record<ImageSize, string> = {
   small: 'h-52 md:h-56',
   medium: 'h-64 md:h-72',
   large: 'h-80 md:h-96',
+  xlarge: 'h-[28rem] md:h-[40rem]',
 };
 
 function simpleDate(value: string) {
@@ -515,7 +530,7 @@ export default function DashboardApp() {
         const parsedMeta = parseBlockMeta(block.content || '');
         return {
           ...block,
-          content: buildBlockContent(value, parsedMeta.columns, parsedMeta.imageSize),
+          content: buildBlockContent(value, parsedMeta.columns, parsedMeta.imageSize, parsedMeta.imageHeight),
         };
       })
     );
@@ -528,7 +543,7 @@ export default function DashboardApp() {
         const parsedMeta = parseBlockMeta(block.content || '');
         return {
           ...block,
-          content: buildBlockContent(parsedMeta.content, columns, parsedMeta.imageSize),
+          content: buildBlockContent(parsedMeta.content, columns, parsedMeta.imageSize, parsedMeta.imageHeight),
         };
       })
     );
@@ -541,7 +556,20 @@ export default function DashboardApp() {
         const parsedMeta = parseBlockMeta(block.content || '');
         return {
           ...block,
-          content: buildBlockContent(parsedMeta.content, parsedMeta.columns, imageSize),
+          content: buildBlockContent(parsedMeta.content, parsedMeta.columns, imageSize, parsedMeta.imageHeight),
+        };
+      })
+    );
+  }
+
+  function handleImageHeightChange(index: number, imageHeight: number | null) {
+    setEditorBlocks((current) =>
+      current.map((block, idx) => {
+        if (idx !== index) return block;
+        const parsedMeta = parseBlockMeta(block.content || '');
+        return {
+          ...block,
+          content: buildBlockContent(parsedMeta.content, parsedMeta.columns, parsedMeta.imageSize, imageHeight),
         };
       })
     );
@@ -1363,6 +1391,62 @@ export default function DashboardApp() {
                                 >
                                   Groß
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleImageSizeChange(index, 'xlarge')}
+                                  className={`rounded-xl border px-3 py-1 text-xs transition ${getBlockImageSize(block.content || '') === 'xlarge' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  Sehr groß
+                                </button>
+                              </div>
+                              <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm text-slate-300">Sichtbare Höhe:</span>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={160}
+                                      max={900}
+                                      step={10}
+                                      value={getBlockImageHeight(block.content || '') ?? ''}
+                                      onChange={(event) => {
+                                        const nextValue = event.target.value;
+                                        if (!nextValue) {
+                                          handleImageHeightChange(index, null);
+                                          return;
+                                        }
+                                        const parsed = Number(nextValue);
+                                        if (Number.isFinite(parsed)) {
+                                          const clamped = Math.min(900, Math.max(160, Math.round(parsed)));
+                                          handleImageHeightChange(index, clamped);
+                                        }
+                                      }}
+                                      placeholder="Auto"
+                                      className="w-24 rounded-xl border border-white/10 bg-[#111] px-2 py-1 text-sm text-white outline-none"
+                                    />
+                                    <span className="text-xs text-slate-400">px</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleImageHeightChange(index, null)}
+                                      className="rounded-xl border border-white/10 px-2 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                                    >
+                                      Auto
+                                    </button>
+                                  </div>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={160}
+                                  max={900}
+                                  step={10}
+                                  value={getBlockImageHeight(block.content || '') ?? 500}
+                                  onChange={(event) => {
+                                    const parsed = Number(event.target.value);
+                                    const clamped = Math.min(900, Math.max(160, Math.round(parsed)));
+                                    handleImageHeightChange(index, clamped);
+                                  }}
+                                  className="w-full accent-orange-400"
+                                />
                               </div>
                               <label className="block text-sm font-medium text-slate-300">Bild aus dem Explorer auswählen</label>
                               <input
@@ -1420,6 +1504,7 @@ export default function DashboardApp() {
                         const blockColumns: BlockColumns = block.type === 'DIVIDER' ? 4 : meta.columns;
                         const blockWidthClass = previewColumnClassMap[blockColumns];
                         const imageHeightClass = previewImageHeightClassMap[meta.imageSize];
+                        const imageHeightStyle = meta.imageHeight !== null ? { height: `${meta.imageHeight}px` } : undefined;
 
                         if (block.type === 'TEXT') {
                           return (
@@ -1433,9 +1518,19 @@ export default function DashboardApp() {
                           return (
                             <section key={`preview-${index}`} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm ${blockWidthClass}`}>
                               {meta.content ? (
-                                <img src={meta.content} alt={`Vorschau Bild ${index + 1}`} className={`w-full object-cover ${imageHeightClass}`} />
+                                <img
+                                  src={meta.content}
+                                  alt={`Vorschau Bild ${index + 1}`}
+                                  className={`w-full object-cover ${meta.imageHeight !== null ? '' : imageHeightClass}`}
+                                  style={imageHeightStyle}
+                                />
                               ) : (
-                                <div className={`flex w-full items-center justify-center bg-black/40 text-sm text-slate-400 ${imageHeightClass}`}>Kein Bild ausgewählt</div>
+                                <div
+                                  className={`flex w-full items-center justify-center bg-black/40 text-sm text-slate-400 ${meta.imageHeight !== null ? '' : imageHeightClass}`}
+                                  style={imageHeightStyle}
+                                >
+                                  Kein Bild ausgewählt
+                                </div>
                               )}
                             </section>
                           );
