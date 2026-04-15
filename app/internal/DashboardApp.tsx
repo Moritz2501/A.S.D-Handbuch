@@ -44,6 +44,7 @@ export default function DashboardApp() {
   const [availableTrainings, setAvailableTrainings] = useState<any[]>([]);
   const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [editorBlocks, setEditorBlocks] = useState([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
   const [trainingModalMode, setTrainingModalMode] = useState<'add' | 'edit' | 'delete'>('add');
   const [trainingModalTitle, setTrainingModalTitle] = useState('');
@@ -318,6 +319,31 @@ export default function DashboardApp() {
       await refreshData();
     } catch (err) {
       setError('Handbuch-Seite konnte nicht gespeichert werden');
+    }
+  }
+
+  async function handleImageUpload(index: number, file: File) {
+    setError('');
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Bild-Upload fehlgeschlagen');
+      }
+
+      handleBlockChange(index, 'content', data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bild-Upload fehlgeschlagen');
+    } finally {
+      setIsUploadingImage(false);
     }
   }
 
@@ -897,13 +923,37 @@ export default function DashboardApp() {
                           </button>
                         </div>
                         {block.type !== 'DIVIDER' ? (
-                          <textarea
-                            rows={4}
-                            value={block.content}
-                            onChange={(event) => handleBlockChange(index, 'content', event.target.value)}
-                            className="mt-3 w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
-                            placeholder={block.type === 'IMAGE' ? 'Bild-URL einfügen' : block.type === 'VIDEO' ? 'Embed-Link einfügen' : 'HTML-Inhalt einfügen'}
-                          />
+                          block.type === 'IMAGE' ? (
+                            <div className="mt-3 space-y-3">
+                              <label className="block text-sm font-medium text-slate-300">Bild aus dem Explorer auswählen</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={async (event) => {
+                                  const file = event.target.files?.[0];
+                                  if (!file) return;
+                                  await handleImageUpload(index, file);
+                                }}
+                                className="w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none file:cursor-pointer file:rounded-xl file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:text-black"
+                              />
+                              {block.content ? (
+                                <div className="rounded-2xl border border-white/10 bg-black/80 p-3">
+                                  <img src={block.content} alt={`Handbuchbild ${index + 1}`} className="w-full object-contain rounded-2xl" />
+                                  <p className="mt-2 text-sm text-slate-400">Bild wurde hochgeladen und wird beim Speichern der Seite verwendet.</p>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-400">Wähle ein Bild aus und speichere die Seite. Kein Link erforderlich.</p>
+                              )}
+                            </div>
+                          ) : (
+                            <textarea
+                              rows={4}
+                              value={block.content}
+                              onChange={(event) => handleBlockChange(index, 'content', event.target.value)}
+                              className="mt-3 w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
+                              placeholder={block.type === 'VIDEO' ? 'Embed-Link einfügen' : 'HTML-Inhalt einfügen'}
+                            />
+                          )
                         ) : (
                           <p className="mt-3 text-sm text-slate-400">Trennlinie wird ohne weiteren Inhalt dargestellt.</p>
                         )}
