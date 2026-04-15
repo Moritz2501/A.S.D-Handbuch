@@ -475,10 +475,6 @@ export default function DashboardApp() {
                       type="button"
                       onClick={() => {
                         setModalCategory('ausbildung');
-                        setTrainingModalMode('add');
-                        setTrainingModalTitle('');
-                        setTrainingModalOriginalTitle('');
-                        setTrainingModalOpen(true);
                         setShowAvailableAusbildungen(true);
                         setShowAvailableFortbildungen(false);
                       }}
@@ -497,51 +493,78 @@ export default function DashboardApp() {
                 </div>
 
                 {showAvailableAusbildungen ? (
-                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <h3 className="text-lg font-semibold text-white">Verfügbare Ausbildungstitel</h3>
-                      <span className="text-sm text-slate-400">Editiere Titel im Popup</span>
-                    </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {availableTrainings
-                        .filter((training) => training.category === 'AUSBILDUNG')
-                        .map((training) => (
-                          <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <span className="text-white">{training.title}</span>
-                              <p className="text-xs text-slate-400">Ausbildung</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalCategory('ausbildung');
-                                  setTrainingModalMode('edit');
-                                  setTrainingModalTitle(training.title);
-                                  setTrainingModalOriginalTitle(training.title);
-                                  setTrainingModalOpen(true);
-                                }}
-                                className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
-                              >
-                                Bearbeiten
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalCategory('ausbildung');
-                                  setTrainingModalMode('delete');
-                                  setTrainingModalOriginalTitle(training.title);
-                                  setTrainingModalOpen(true);
-                                }}
-                                className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
-                              >
-                                Löschen
-                              </button>
-                            </div>
-                          </div>
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <h3 className="text-xl font-semibold text-white">Verfügbare Ausbildungstitel</h3>
+                          <p className="text-sm text-slate-400">Schließe das Fenster, um die Titel auszublenden.</p>
                         </div>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={() => setShowAvailableAusbildungen(false)}
+                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10"
+                        >
+                          Schließen
+                        </button>
+                      </div>
+
+                      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {availableTrainings
+                          .filter((training) => training.category === 'AUSBILDUNG')
+                          .map((training) => (
+                            <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-black/50 p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <span className="text-white">{training.title}</span>
+                                  <p className="text-xs text-slate-400">Ausbildung</p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setModalCategory('ausbildung');
+                                      setTrainingModalMode('edit');
+                                      setTrainingModalTitle(training.title);
+                                      setTrainingModalOriginalTitle(training.title);
+                                      setTrainingModalOpen(true);
+                                    }}
+                                    className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
+                                  >
+                                    Bearbeiten
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setModalCategory('ausbildung');
+                                      setTrainingModalMode('delete');
+                                      setTrainingModalOriginalTitle(training.title);
+                                      setTrainingModalOpen(true);
+                                    }}
+                                    className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
+                                  >
+                                    Löschen
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTrainingModalMode('add');
+                            setTrainingModalTitle('');
+                            setTrainingModalOriginalTitle('');
+                            setTrainingModalOpen(true);
+                          }}
+                          className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                        >
+                          Ausbildung hinzufügen
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -600,10 +623,6 @@ export default function DashboardApp() {
                     type="button"
                     onClick={() => {
                       setModalCategory('fortbildung');
-                      setTrainingModalMode('add');
-                      setTrainingModalTitle('');
-                      setTrainingModalOriginalTitle('');
-                      setTrainingModalOpen(true);
                       setShowAvailableFortbildungen(true);
                       setShowAvailableAusbildungen(false);
                     }}
@@ -614,50 +633,78 @@ export default function DashboardApp() {
                 </div>
 
                 {showAvailableFortbildungen ? (
-                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">Verfügbare Fortbildungstitel</h3>
-                        <p className="text-sm text-slate-400">Verwalte Fortbildungen separat</p>
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <h3 className="text-xl font-semibold text-white">Verfügbare Fortbildungstitel</h3>
+                          <p className="text-sm text-slate-400">Schließe das Fenster, um die Titel auszublenden.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAvailableFortbildungen(false)}
+                          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10"
+                        >
+                          Schließen
+                        </button>
                       </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {availableTrainings
-                        .filter((training) => training.category === 'FORTBILDUNG')
-                        .map((training) => (
-                          <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-surface p-4">
-                            <div className="flex items-center justify-between gap-4">
-                              <span className="text-white">{training.title}</span>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setModalCategory('fortbildung');
-                                    setTrainingModalMode('edit');
-                                    setTrainingModalTitle(training.title);
-                                    setTrainingModalOriginalTitle(training.title);
-                                    setTrainingModalOpen(true);
-                                  }}
-                                  className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
-                                >
-                                  Bearbeiten
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setModalCategory('fortbildung');
-                                    setTrainingModalMode('delete');
-                                    setTrainingModalOriginalTitle(training.title);
-                                    setTrainingModalOpen(true);
-                                  }}
-                                  className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
-                                >
-                                  Löschen
-                                </button>
+
+                      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {availableTrainings
+                          .filter((training) => training.category === 'FORTBILDUNG')
+                          .map((training) => (
+                            <div key={`${training.category}-${training.title}`} className="rounded-2xl border border-white/10 bg-black/50 p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <span className="text-white">{training.title}</span>
+                                  <p className="text-xs text-slate-400">Fortbildung</p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setModalCategory('fortbildung');
+                                      setTrainingModalMode('edit');
+                                      setTrainingModalTitle(training.title);
+                                      setTrainingModalOriginalTitle(training.title);
+                                      setTrainingModalOpen(true);
+                                    }}
+                                    className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-blue-300 transition hover:bg-white/10"
+                                  >
+                                    Bearbeiten
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setModalCategory('fortbildung');
+                                      setTrainingModalMode('delete');
+                                      setTrainingModalOriginalTitle(training.title);
+                                      setTrainingModalOpen(true);
+                                    }}
+                                    className="rounded-2xl bg-white/5 px-3 py-2 text-sm text-red-300 transition hover:bg-white/10"
+                                  >
+                                    Löschen
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                      </div>
+
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTrainingModalMode('add');
+                            setTrainingModalTitle('');
+                            setTrainingModalOriginalTitle('');
+                            setTrainingModalOpen(true);
+                          }}
+                          className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                        >
+                          Fortbildung hinzufügen
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
