@@ -12,6 +12,15 @@ const rankOptions = [
   { value: 'Flight_Student', label: 'Flight Student' },
 ];
 
+const rankHierarchy = [
+  'Flight_Student',
+  'Flight_Officer',
+  'Senior_Flight_Officer',
+  'Flight_Instructor',
+  'ASD_Co_Director',
+  'ASD_Director',
+];
+
 const trainingOptions = ['Basic Flight Training', 'Advanced Navigation', 'Emergency Response'];
 
 function simpleDate(value: string) {
@@ -30,7 +39,10 @@ export default function DashboardApp() {
   const [newMember, setNewMember] = useState({ name: '', rank: 'Flight_Officer', joinedAt: simpleDate(new Date().toISOString()) });
   const [dutyForm, setDutyForm] = useState({ startDate: simpleDate(new Date().toISOString()), endDate: simpleDate(new Date(Date.now() + 6048e5).toISOString()), hours: '0', minutes: '0', memberId: '', isVacation: false });
   const [trainingForm, setTrainingForm] = useState({ memberId: '', title: trainingOptions[0], completed: false });
-  const [newPage, setNewPage] = useState({ title: '', slug: '', description: '', published: false });
+  const [newPage, setNewPage] = useState({ title: '', description: '', published: false });
+  const [editingPage, setEditingPage] = useState<any>(null);
+  const [availableTrainings, setAvailableTrainings] = useState<any[]>([]);
+  const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [editorBlocks, setEditorBlocks] = useState([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
 
   useEffect(() => {
@@ -57,7 +69,19 @@ export default function DashboardApp() {
   }, []);
 
   const officerMembers = useMemo(
-    () => members.filter((member) => !['Flight_Student', 'ASD_Director', 'ASD_Co_Director'].includes(member.rank)),
+    () => members
+      .filter((member) => !['Flight_Student', 'ASD_Director', 'ASD_Co_Director'].includes(member.rank))
+      .sort((a, b) => {
+        // Sortiere nach Rang-Hierarchie
+        const rankOrder = ['Flight_Instructor', 'Senior_Flight_Officer', 'Flight_Officer'];
+        const aRankIndex = rankOrder.indexOf(a.rank);
+        const bRankIndex = rankOrder.indexOf(b.rank);
+        if (aRankIndex !== bRankIndex) {
+          return aRankIndex - bRankIndex;
+        }
+        // Dann nach joinedAt (älteste zuerst)
+        return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+      }),
     [members]
   );
   const studentMembers = useMemo(() => members.filter((member) => member.rank === 'Flight_Student'), [members]);
@@ -65,16 +89,18 @@ export default function DashboardApp() {
 
   async function refreshData() {
     try {
-      const [membersRes, trainingsRes, dutiesRes, pagesRes] = await Promise.all([
+      const [membersRes, trainingsRes, dutiesRes, pagesRes, trainingsManageRes] = await Promise.all([
         fetch('/api/members'),
         fetch('/api/trainings'),
         fetch('/api/duty-times'),
         fetch('/api/handbook/pages'),
+        fetch('/api/trainings/manage'),
       ]);
       setMembers(await membersRes.json());
       setTrainings(await trainingsRes.json());
       setDutyTimes(await dutiesRes.json());
       setPages(await pagesRes.json());
+      setAvailableTrainings(await trainingsManageRes.json());
     } catch (err) {
       setError('Fehler beim Laden der Daten');
     }
@@ -135,17 +161,109 @@ export default function DashboardApp() {
       setError('Training konnte nicht gespeichert werden');
     }
   }
+  async function handlePromoteMember(memberId: string, newRank: string) {
+    try {
+      const response = await fetch('/api/members/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, newRank }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        setError(error.error || 'Beförderung fehlgeschlagen');
+        return;
+      }
+      await refreshData();
+    } catch (err) {
+      setError('Beförderung fehlgeschlagen');
+    }
+  }
 
+  async function handleAutoPromote() {
+    try {
+      await fetch('/api/members/promote', { method: 'PUT' });
+      await refreshData();
+    } catch (err) {
+      setError('Automatische Beförderung fehlgeschlagen');
+    }
+  }
+
+  async function handleAddTraining() {
+    if (!newTrainingTitle.trim()) return;
+    try {
+      await fetch('/api/trainings/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTrainingTitle }),
+      });
+      setNewTrainingTitle('');
+      await refreshData();
+    } catch (err) {
+      setError('Ausbildung konnte nicht hinzugefügt werden');
+    }
+  }
+
+  async function handleRenameTraining(oldTitle: string, newTitle: string) {
+    try {
+      await fetch('/api/trainings/manage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldTitle, newTitle }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Ausbildung konnte nicht umbenannt werden');
+    }
+  }
+
+  async function handleDeleteTraining(title: string) {
+    if (!confirm(`Ausbildung "${title}" wirklich löschen?`)) return;
+    try {
+      await fetch('/api/trainings/manage', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Ausbildung konnte nicht gelöscht werden');
+    }
+  }
+
+  function startEditingPage(page: any) {
+    setEditingPage(page);
+    setNewPage({
+      title: page.title,
+      description: page.description || '',
+      published: page.published,
+    });
+  }
+
+  function cancelEditing() {
+    setEditingPage(null);
+    setNewPage({ title: '', description: '', published: false });
+  }
   async function handlePageSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError('');
     try {
-      const payload = { ...newPage, blocks: editorBlocks };
-      await fetch('/api/handbook/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      setNewPage({ title: '', slug: '', description: '', published: false });
+      const url = editingPage ? `/api/handbook/pages` : '/api/handbook/pages';
+      const method = editingPage ? 'PATCH' : 'POST';
+      const data = editingPage
+        ? { ...newPage, id: editingPage.id, blocks: editorBlocks }
+        : { ...newPage, blocks: editorBlocks };
+
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      setNewPage({ title: '', description: '', published: false });
+      setEditingPage(null);
       setEditorBlocks([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
       await refreshData();
     } catch (err) {
-      setError('Seite konnte nicht gespeichert werden');
+      setError('Handbuch-Seite konnte nicht gespeichert werden');
     }
   }
 
@@ -247,9 +365,26 @@ export default function DashboardApp() {
                           <td className="px-4 py-4 text-slate-300">{member.rank.replaceAll('_', ' ')}</td>
                           <td className="px-4 py-4 text-slate-300">{new Date(member.joinedAt).toLocaleDateString('de-DE')}</td>
                           <td className="px-4 py-4">
-                            <button onClick={() => handleDeleteMember(member.id)} className="rounded-2xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10">
-                              Entfernen
-                            </button>
+                            <div className="flex gap-2">
+                              {member.rank !== 'ASD_Director' && (
+                                <button
+                                  onClick={() => {
+                                    const currentIndex = rankHierarchy.indexOf(member.rank);
+                                    const nextRank = rankHierarchy[currentIndex + 1];
+                                    if (nextRank) {
+                                      handlePromoteMember(member.id, nextRank);
+                                    }
+                                  }}
+                                  className="rounded-2xl border border-green-500/40 px-3 py-2 text-sm text-green-300 transition hover:bg-green-500/10"
+                                  disabled={member.rank === 'ASD_Director'}
+                                >
+                                  Uprank
+                                </button>
+                              )}
+                              <button onClick={() => handleDeleteMember(member.id)} className="rounded-2xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10">
+                                Entfernen
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -261,8 +396,66 @@ export default function DashboardApp() {
 
             {!loading && activeTab === 'training' && (
               <section className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
-                <h2 className="text-2xl font-semibold">Ausbildung</h2>
-                <p className="mt-2 text-slate-400">Schließe Ausbildungen für Flight Students oder Officer ab.</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Ausbildung</h2>
+                    <p className="mt-2 text-slate-400">Verwalte Ausbildungen und schließe Trainings ab.</p>
+                  </div>
+                  <button
+                    onClick={handleAutoPromote}
+                    className="rounded-2xl bg-green-500 px-4 py-2 text-black transition hover:bg-green-400"
+                  >
+                    Auto-Beförderung
+                  </button>
+                </div>
+
+                {/* Ausbildungs-Management */}
+                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
+                  <h3 className="text-lg font-semibold text-white mb-4">Verfügbare Ausbildungen</h3>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {availableTrainings.map((training) => (
+                      <div key={training.title} className="rounded-2xl border border-white/10 bg-surface p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white">{training.title}</span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                const newTitle = prompt('Neuer Name:', training.title);
+                                if (newTitle && newTitle !== training.title) {
+                                  handleRenameTraining(training.title, newTitle);
+                                }
+                              }}
+                              className="text-blue-400 hover:text-blue-300"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTraining(training.title)}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); handleAddTraining(); }} className="mt-4 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Neue Ausbildung hinzufügen..."
+                      value={newTrainingTitle}
+                      onChange={(e) => setNewTrainingTitle(e.target.value)}
+                      className="flex-1 rounded-2xl border border-white/10 bg-black/70 px-4 py-2 text-white outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                    >
+                      Hinzufügen
+                    </button>
+                  </form>
+                </div>
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-3xl border border-white/10 bg-black/50 p-4">
@@ -272,6 +465,27 @@ export default function DashboardApp() {
                         <div key={member.id} className="rounded-2xl border border-white/10 bg-surface p-3">
                           <p className="font-medium text-white">{member.name}</p>
                           <p className="text-sm text-slate-400">{member.rank.replaceAll('_', ' ')}</p>
+                          <div className="mt-2 space-y-1">
+                            {trainings
+                              .filter((t) => t.memberId === member.id)
+                              .map((training) => (
+                                <div key={training.id} className="flex items-center gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      await fetch('/api/trainings', {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ id: training.id, completed: !training.completed }),
+                                      });
+                                      await refreshData();
+                                    }}
+                                    className={`text-sm ${training.completed ? 'text-green-400' : 'text-slate-400'} hover:text-white`}
+                                  >
+                                    {training.completed ? '✅' : '⬜'} {training.title}
+                                  </button>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -467,21 +681,62 @@ export default function DashboardApp() {
                 <h2 className="text-2xl font-semibold">Handbuch Verwaltung</h2>
                 <p className="mt-2 text-slate-400">Erstelle Seiten, bearbeite Inhalte und veröffentliche sie für den öffentlichen Bereich.</p>
 
+                {/* Bestehende Seiten */}
+                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
+                  <h3 className="text-lg font-semibold text-white mb-4">Vorhandene Seiten</h3>
+                  <div className="space-y-3">
+                    {pages.map((page) => (
+                      <div key={page.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface p-3">
+                        <div>
+                          <p className="font-medium text-white">{page.title}</p>
+                          <p className="text-sm text-slate-400">/{page.slug} • {page.published ? 'Veröffentlicht' : 'Entwurf'}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startEditingPage(page)}
+                            className="rounded-2xl border border-blue-500/40 px-3 py-2 text-sm text-blue-300 transition hover:bg-blue-500/10"
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`"${page.title}" wirklich löschen?`)) {
+                                await fetch(`/api/handbook/pages?id=${page.id}`, { method: 'DELETE' });
+                                await refreshData();
+                              }
+                            }}
+                            className="rounded-2xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
+                          >
+                            Löschen
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Formular für neue/bearbeitete Seiten */}
                 <form onSubmit={handlePageSubmit} className="mt-6 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">
+                      {editingPage ? 'Seite bearbeiten' : 'Neue Seite erstellen'}
+                    </h3>
+                    {editingPage && (
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        className="rounded-2xl border border-slate-500/40 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-500/10"
+                      >
+                        Abbrechen
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <input
                       type="text"
                       placeholder="Titel"
                       value={newPage.title}
                       onChange={(event) => setNewPage({ ...newPage, title: event.target.value })}
-                      className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
-                      required
-                    />
-                    <input
-                      type="text"
-                      placeholder="Slug"
-                      value={newPage.slug}
-                      onChange={(event) => setNewPage({ ...newPage, slug: event.target.value })}
                       className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
                       required
                     />

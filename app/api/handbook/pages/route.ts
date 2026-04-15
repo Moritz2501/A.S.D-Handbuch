@@ -20,7 +20,16 @@ export async function POST(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { title, slug, description, published } = await req.json();
+  const { title, description, published } = await req.json();
+
+  // Slug automatisch aus Titel generieren
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Entferne Sonderzeichen
+    .replace(/\s+/g, '-') // Leerzeichen zu Bindestrichen
+    .replace(/-+/g, '-') // Mehrere Bindestriche zu einem
+    .trim();
+
   const page = await prisma.handbookPage.create({
     data: {
       title,
