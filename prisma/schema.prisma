@@ -19,13 +19,14 @@ model Member {
 }
 
 model Training {
-  id          String   @id @default(uuid())
-  member      Member   @relation(fields: [memberId], references: [id])
+  id          String           @id @default(uuid())
+  member      Member           @relation(fields: [memberId], references: [id])
   memberId    String
   title       String
-  completed   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  category    TrainingCategory @default(AUSBILDUNG)
+  completed   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model DutyTime {
@@ -77,4 +78,9 @@ enum BlockType {
   IMAGE
   VIDEO
   DIVIDER
+}
+
+enum TrainingCategory {
+  AUSBILDUNG
+  FORTBILDUNG
 }

@@ -51,7 +51,7 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
           <aside className="rounded-[2rem] border border-white/10 bg-surface/85 p-6 shadow-glow backdrop-blur-xl">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Wiki Navigation</p>
+                <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Navigation</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Seiten</h2>
               </div>
             </div>

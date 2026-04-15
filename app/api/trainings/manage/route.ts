@@ -6,21 +6,25 @@ export async function GET() {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  // Alle verfügbaren Ausbildungen zurückgeben (unique titles)
   const trainings = await prisma.training.findMany({
     select: {
       title: true,
+      category: true,
       completed: true,
     },
   });
 
-  // Unique Ausbildungstitel extrahieren
-  const uniqueTrainings = [...new Set(trainings.map(t => t.title))].map(title => ({
-    title,
-    isCompleted: trainings.some(t => t.title === title && t.completed),
-  }));
+  const uniqueMap = trainings.reduce((map, training) => {
+    const key = `${training.category}:${training.title}`;
+    if (!map.has(key)) {
+      map.set(key, { title: training.title, category: training.category, isCompleted: training.completed });
+    } else if (training.completed) {
+      map.get(key)!.isCompleted = true;
+    }
+    return map;
+  }, new Map<string, { title: string; category: string; isCompleted: boolean }>());
 
-  return NextResponse.json(uniqueTrainings);
+  return NextResponse.json(Array.from(uniqueMap.values()));
 }
 
 export async function POST(req: NextRequest) {
@@ -30,19 +34,22 @@ export async function POST(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { title } = await req.json();
+  const { title, category } = await req.json();
 
-  // Neue Ausbildung zu allen Flight Students hinzufügen
-  const flightStudents = await prisma!.member.findMany({
-    where: { rank: 'Flight_Student' },
-  });
+  const trainingCategory = category === 'FORTBILDUNG' ? 'FORTBILDUNG' : 'AUSBILDUNG';
+  const memberFilter = trainingCategory === 'FORTBILDUNG'
+    ? { rank: { in: ['Flight_Officer', 'Senior_Flight_Officer', 'Flight_Instructor'] as const } }
+    : { rank: 'Flight_Student' as const };
+
+  const members = await prisma!.member.findMany({ where: memberFilter as any });
 
   const newTrainings = await Promise.all(
-    flightStudents.map(student =>
+    members.map(member =>
       prisma!.training.create({
         data: {
-          memberId: student.id,
+          memberId: member.id,
           title,
+          category: trainingCategory,
           completed: false,
         },
       })
@@ -59,11 +66,11 @@ export async function PATCH(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { oldTitle, newTitle } = await req.json();
+  const { oldTitle, newTitle, category } = await req.json();
+  const trainingCategory = category === 'FORTBILDUNG' ? 'FORTBILDUNG' : 'AUSBILDUNG';
 
-  // Alle Trainings mit dem alten Titel umbenennen
   await prisma!.training.updateMany({
-    where: { title: oldTitle },
+    where: { title: oldTitle, category: trainingCategory },
     data: { title: newTitle },
   });
 
@@ -77,11 +84,12 @@ export async function DELETE(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { title } = await req.json();
+  const { title, category } = await req.json();
+  const trainingCategory = category === 'FORTBILDUNG' ? 'FORTBILDUNG' : 'AUSBILDUNG';
 
   // Alle Trainings mit diesem Titel löschen
   await prisma!.training.deleteMany({
-    where: { title },
+    where: { title, category: trainingCategory },
   });
 
   return NextResponse.json({ message: 'Ausbildung entfernt' });

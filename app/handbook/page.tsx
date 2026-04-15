@@ -18,9 +18,9 @@ export default async function HandbookIndexPage() {
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2rem] border border-white/10 bg-surface/85 p-10 shadow-glow backdrop-blur-xl">
             <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Handbuch</p>
-            <h1 className="mt-4 text-5xl font-semibold tracking-tight text-white">ASD-Wiki</h1>
+            <h1 className="mt-4 text-5xl font-semibold tracking-tight text-white">ASD Handbuch</h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-300">
-              Offizielles Wiki der Air Support Division. Überall verfügbar, einfach zu navigieren und immer aktuell.
+              Offizielles Handbuch der Air Support Division. Überall verfügbar, einfach zu navigieren und immer aktuell.
             </p>
             <div className="mt-10 rounded-3xl border border-white/10 bg-black/40 p-5">
               <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Schnellstart</p>
@@ -38,7 +38,7 @@ export default async function HandbookIndexPage() {
                 <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Inhalte</p>
                 <h2 className="mt-2 text-3xl font-semibold text-white">Seitenübersicht</h2>
               </div>
-              <span className="rounded-full border border-orange-500 px-3 py-1 text-sm text-orange-300">Wiki</span>
+              <span className="rounded-full border border-orange-500 px-3 py-1 text-sm text-orange-300">Handbuch</span>
             </div>
             <div className="mt-8 grid gap-4">
               {pages.length === 0 ? (

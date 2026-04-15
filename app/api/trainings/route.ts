@@ -17,11 +17,12 @@ export async function POST(req: NextRequest) {
   if (!prisma) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-  const { memberId, title, completed } = await req.json();
+  const { memberId, title, completed, category } = await req.json();
   const training = await prisma.training.create({
     data: {
       memberId,
       title,
+      category: category === 'FORTBILDUNG' ? 'FORTBILDUNG' : 'AUSBILDUNG',
       completed: Boolean(completed),
     },
   });
