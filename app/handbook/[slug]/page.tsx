@@ -4,6 +4,21 @@ import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
+type BlockLayout = 'full' | 'half';
+
+const layoutPrefix = /^\[\[layout:(full|half)\]\]/;
+
+function parseBlockLayout(content: string): { layout: BlockLayout; content: string } {
+  const match = content.match(layoutPrefix);
+  if (!match) {
+    return { layout: 'full', content };
+  }
+  return {
+    layout: match[1] === 'half' ? 'half' : 'full',
+    content: content.replace(layoutPrefix, ''),
+  };
+}
+
 async function getPage(slug: string) {
   if (!prisma) return null;
   return prisma.handbookPage.findUnique({
@@ -82,28 +97,32 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
               {page.blocks.map((block: any) => {
+                const parsedBlock = parseBlockLayout(block.content || '');
+                const isFullWidth = block.type === 'DIVIDER' || parsedBlock.layout === 'full';
+                const blockWidthClass = isFullWidth ? 'md:col-span-2' : 'md:col-span-1';
+
                 if (block.type === 'TEXT') {
                   return (
-                    <section key={block.id} className="rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm">
-                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                    <section key={block.id} className={`rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm ${blockWidthClass}`}>
+                      <div dangerouslySetInnerHTML={{ __html: parsedBlock.content }} />
                     </section>
                   );
                 }
                 if (block.type === 'IMAGE') {
                   return (
-                    <section key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm">
-                      <img src={block.content} alt="Handbuch Bild" className="w-full object-cover" />
+                    <section key={block.id} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm ${blockWidthClass}`}>
+                      <img src={parsedBlock.content} alt="Handbuch Bild" className="w-full object-cover" />
                     </section>
                   );
                 }
                 if (block.type === 'VIDEO') {
                   return (
-                    <section key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm">
+                    <section key={block.id} className={`overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm ${blockWidthClass}`}>
                       <div className="aspect-video overflow-hidden rounded-3xl bg-black">
                         <iframe
-                          src={block.content}
+                          src={parsedBlock.content}
                           title="Video Embed"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
@@ -114,7 +133,7 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
                   );
                 }
                 if (block.type === 'DIVIDER') {
-                  return <hr key={block.id} className="border-slate-700" />;
+                  return <hr key={block.id} className={`border-slate-700 ${blockWidthClass}`} />;
                 }
                 return null;
               })}

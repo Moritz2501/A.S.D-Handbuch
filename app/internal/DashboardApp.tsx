@@ -23,6 +23,25 @@ const rankHierarchy = [
 
 const trainingOptions = ['Basic Flight Training', 'Advanced Navigation', 'Emergency Response'];
 
+type BlockLayout = 'full' | 'half';
+const layoutPrefix = /^\[\[layout:(full|half)\]\]/;
+
+function stripLayoutPrefix(content: string): string {
+  return (content || '').replace(layoutPrefix, '');
+}
+
+function getBlockLayout(content: string): BlockLayout {
+  const match = (content || '').match(layoutPrefix);
+  if (!match) return 'full';
+  return match[1] === 'half' ? 'half' : 'full';
+}
+
+function withBlockLayout(content: string, layout: BlockLayout): string {
+  const rawContent = stripLayoutPrefix(content || '');
+  if (layout === 'full') return rawContent;
+  return `[[layout:${layout}]]${rawContent}`;
+}
+
 function simpleDate(value: string) {
   return value ? new Date(value).toISOString().split('T')[0] : '';
 }
@@ -435,7 +454,24 @@ export default function DashboardApp() {
   }
 
   function handleBlockChange(index: number, key: string, value: string) {
-    setEditorBlocks((current) => current.map((block, idx) => (idx === index ? { ...block, [key]: value } : block)));
+    setEditorBlocks((current) =>
+      current.map((block, idx) => {
+        if (idx !== index) return block;
+        if (key !== 'content') return { ...block, [key]: value };
+
+        const currentLayout = getBlockLayout(block.content || '');
+        return { ...block, content: withBlockLayout(value, currentLayout) };
+      })
+    );
+  }
+
+  function handleBlockLayoutChange(index: number, layout: BlockLayout) {
+    setEditorBlocks((current) =>
+      current.map((block, idx) => {
+        if (idx !== index) return block;
+        return { ...block, content: withBlockLayout(block.content || '', layout) };
+      })
+    );
   }
 
   function moveBlock(index: number, direction: 'up' | 'down') {
@@ -1075,6 +1111,24 @@ export default function DashboardApp() {
                         <div className="flex items-center justify-between gap-4">
                           <span className="text-sm font-semibold text-white">{block.type} <span className="text-xs font-normal text-slate-400">(ziehen zum Umsortieren)</span></span>
                           <div className="flex items-center gap-2">
+                            {block.type !== 'DIVIDER' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBlockLayoutChange(index, 'full')}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockLayout(block.content || '') === 'full' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  Volle Breite
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBlockLayoutChange(index, 'half')}
+                                  className={`rounded-xl border px-2 py-1 text-xs transition ${getBlockLayout(block.content || '') === 'half' ? 'border-orange-400/60 bg-orange-500/10 text-orange-200' : 'border-white/10 text-slate-200 hover:bg-white/10'}`}
+                                >
+                                  1/2 Breite
+                                </button>
+                              </>
+                            )}
                             <button
                               type="button"
                               onClick={() => moveBlock(index, 'up')}
@@ -1184,7 +1238,7 @@ export default function DashboardApp() {
                               </div>
                               <RichHtmlEditor
                                 editorId={String(index)}
-                                value={block.content}
+                                value={stripLayoutPrefix(block.content || '')}
                                 onChange={(nextValue) => handleBlockChange(index, 'content', nextValue)}
                               />
                             </div>
@@ -1203,7 +1257,7 @@ export default function DashboardApp() {
                               />
                               {block.content ? (
                                 <div className="rounded-2xl border border-white/10 bg-black/80 p-3">
-                                  <img src={block.content} alt={`Handbuchbild ${index + 1}`} className="w-full object-contain rounded-2xl" />
+                                  <img src={stripLayoutPrefix(block.content || '')} alt={`Handbuchbild ${index + 1}`} className="w-full object-contain rounded-2xl" />
                                   <p className="mt-2 text-sm text-slate-400">Bild wurde hochgeladen und wird beim Speichern der Seite verwendet.</p>
                                 </div>
                               ) : (
@@ -1214,7 +1268,7 @@ export default function DashboardApp() {
                           ) : (
                             <textarea
                               rows={4}
-                              value={block.content}
+                              value={stripLayoutPrefix(block.content || '')}
                               onChange={(event) => handleBlockChange(index, 'content', event.target.value)}
                               className="mt-3 w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-white outline-none"
                               placeholder={block.type === 'VIDEO' ? 'Embed-Link einfügen' : 'HTML-Inhalt einfügen'}
