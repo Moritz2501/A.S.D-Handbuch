@@ -44,6 +44,7 @@ export default function DashboardApp() {
   const [availableTrainings, setAvailableTrainings] = useState<any[]>([]);
   const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [editorBlocks, setEditorBlocks] = useState([{ type: 'TEXT', content: '<p>Erstelle Inhalte hier...</p>' }]);
+  const [draggedPageIndex, setDraggedPageIndex] = useState<number | null>(null);
   const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
@@ -297,6 +298,39 @@ export default function DashboardApp() {
       await refreshData();
     } catch (err) {
       setError('Seitenreihenfolge konnte nicht gespeichert werden');
+    }
+  }
+
+  function handlePageDragStart(index: number) {
+    setDraggedPageIndex(index);
+  }
+
+  function handlePageDragEnd() {
+    setDraggedPageIndex(null);
+  }
+
+  async function handlePageDrop(targetIndex: number) {
+    if (draggedPageIndex === null || draggedPageIndex === targetIndex) {
+      setDraggedPageIndex(null);
+      return;
+    }
+
+    const reordered = [...pages];
+    const [moved] = reordered.splice(draggedPageIndex, 1);
+    const insertIndex = draggedPageIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    reordered.splice(insertIndex, 0, moved);
+
+    try {
+      await fetch('/api/handbook/pages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageOrderIds: reordered.map((page) => page.id) }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Seitenreihenfolge konnte nicht gespeichert werden');
+    } finally {
+      setDraggedPageIndex(null);
     }
   }
 
@@ -883,9 +917,18 @@ export default function DashboardApp() {
                 {/* Bestehende Seiten */}
                 <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-4">
                   <h3 className="text-lg font-semibold text-white mb-4">Vorhandene Seiten</h3>
+                  <p className="mb-4 text-sm text-slate-400">Seiten können per Drag-and-Drop oder mit Hoch/Runter sortiert werden.</p>
                   <div className="space-y-3">
                     {pages.map((page, index) => (
-                      <div key={page.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface p-3">
+                      <div
+                        key={page.id}
+                        draggable
+                        onDragStart={() => handlePageDragStart(index)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handlePageDrop(index)}
+                        onDragEnd={handlePageDragEnd}
+                        className={`flex items-center justify-between rounded-2xl border bg-surface p-3 ${draggedPageIndex === index ? 'border-orange-400/60' : 'border-white/10'}`}
+                      >
                         <div>
                           <p className="font-medium text-white">{index + 1}. {page.title}</p>
                           <p className="text-sm text-slate-400">/{page.slug} • {page.published ? 'Veröffentlicht' : 'Entwurf'}</p>
