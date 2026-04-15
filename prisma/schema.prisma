@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id           String    @id @default(uuid())
+  name         String
+  rank         Rank
+  joinedAt     DateTime
+  trainings    Training[]
+  dutyTimes    DutyTime[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Training {
+  id          String   @id @default(uuid())
+  member      Member   @relation(fields: [memberId], references: [id])
+  memberId    String
+  title       String
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DutyTime {
+  id          String   @id @default(uuid())
+  member      Member   @relation(fields: [memberId], references: [id])
+  memberId    String
+  startDate   DateTime
+  endDate     DateTime
+  hours       Int      @default(0)
+  minutes     Int      @default(0)
+  isVacation  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model HandbookPage {
+  id          String                @id @default(uuid())
+  title       String
+  slug        String                @unique
+  description String?
+  published   Boolean               @default(false)
+  blocks      HandbookContentBlock[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model HandbookContentBlock {
+  id          String         @id @default(uuid())
+  page        HandbookPage   @relation(fields: [pageId], references: [id])
+  pageId      String
+  type        BlockType
+  content     String
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+enum Rank {
+  ASD_Director
+  ASD_Co_Director
+  Flight_Instructor
+  Senior_Flight_Officer
+  Flight_Officer
+  Flight_Student
+}
+
+enum BlockType {
+  TEXT
+  IMAGE
+  VIDEO
+  DIVIDER
+}
