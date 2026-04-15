@@ -12,6 +12,11 @@ async function getPage(slug: string) {
   });
 }
 
+async function getPages() {
+  if (!prisma) return [];
+  return prisma.handbookPage.findMany({ where: { published: true }, orderBy: { updatedAt: 'desc' } });
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const page = await getPage(slug);
@@ -24,6 +29,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function HandbookPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const page = await getPage(slug);
+  const pages = await getPages();
+
   if (!page || !page.published) {
     return (
       <main className="min-h-screen bg-background text-white">
@@ -39,48 +46,80 @@ export default async function HandbookPage({ params }: { params: Promise<{ slug:
   return (
     <main className="min-h-screen bg-background text-white">
       <Navbar />
-      <section className="mx-auto mt-24 max-w-4xl space-y-8 px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="rounded-[2rem] border border-white/10 bg-surface/80 p-8 shadow-glow backdrop-blur-xl">
-          <h1 className="text-4xl font-semibold text-white">{page.title}</h1>
-          <p className="mt-3 text-slate-400">{page.description}</p>
-        </div>
+      <section className="mx-auto mt-24 max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="rounded-[2rem] border border-white/10 bg-surface/85 p-6 shadow-glow backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Wiki Navigation</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Seiten</h2>
+              </div>
+            </div>
+            <div className="mt-6 space-y-2">
+              {pages.map((item: any) => (
+                <a
+                  key={item.id}
+                  href={`/handbook/${item.slug}`}
+                  className={`block rounded-2xl border px-4 py-3 text-sm transition ${item.slug === slug ? 'border-orange-400 bg-orange-500/10 text-orange-300' : 'border-white/10 bg-black/20 text-slate-300 hover:border-orange-400/40 hover:bg-white/5'}`}
+                >
+                  {item.title}
+                </a>
+              ))}
+            </div>
+          </aside>
 
-        <div className="space-y-6">
-          {page.blocks.map((block: any) => {
-            if (block.type === 'TEXT') {
-              return (
-                <div key={block.id} className="rounded-3xl border border-white/10 bg-surface p-6 text-slate-200">
-                  <div dangerouslySetInnerHTML={{ __html: block.content }} />
+          <article className="space-y-6">
+            <div className="rounded-[2rem] border border-white/10 bg-surface/80 p-8 shadow-glow backdrop-blur-xl">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-orange-400">Handbuchseite</p>
+                  <h1 className="mt-3 text-4xl font-semibold text-white">{page.title}</h1>
                 </div>
-              );
-            }
-            if (block.type === 'IMAGE') {
-              return (
-                <div key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface">
-                  <img src={block.content} alt="Handbuch Bild" className="w-full object-cover" />
+                <div className="text-right text-sm text-slate-400">
+                  {page.updatedAt ? <p>Zuletzt aktualisiert: {new Date(page.updatedAt).toLocaleDateString('de-DE')}</p> : null}
+                  <p className="mt-2">{page.description}</p>
                 </div>
-              );
-            }
-            if (block.type === 'VIDEO') {
-              return (
-                <div key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface p-4">
-                  <div className="aspect-video overflow-hidden rounded-3xl bg-black">
-                    <iframe
-                      src={block.content}
-                      title="Video Embed"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="h-full w-full"
-                    />
-                  </div>
-                </div>
-              );
-            }
-            if (block.type === 'DIVIDER') {
-              return <hr key={block.id} className="border-slate-700" />;
-            }
-            return null;
-          })}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {page.blocks.map((block: any) => {
+                if (block.type === 'TEXT') {
+                  return (
+                    <section key={block.id} className="rounded-3xl border border-white/10 bg-surface p-6 text-slate-200 shadow-sm">
+                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                    </section>
+                  );
+                }
+                if (block.type === 'IMAGE') {
+                  return (
+                    <section key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-sm">
+                      <img src={block.content} alt="Handbuch Bild" className="w-full object-cover" />
+                    </section>
+                  );
+                }
+                if (block.type === 'VIDEO') {
+                  return (
+                    <section key={block.id} className="overflow-hidden rounded-3xl border border-white/10 bg-surface p-4 shadow-sm">
+                      <div className="aspect-video overflow-hidden rounded-3xl bg-black">
+                        <iframe
+                          src={block.content}
+                          title="Video Embed"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="h-full w-full"
+                        />
+                      </div>
+                    </section>
+                  );
+                }
+                if (block.type === 'DIVIDER') {
+                  return <hr key={block.id} className="border-slate-700" />;
+                }
+                return null;
+              })}
+            </div>
+          </article>
         </div>
       </section>
     </main>
