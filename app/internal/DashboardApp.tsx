@@ -166,6 +166,7 @@ export default function DashboardApp() {
   const [members, setMembers] = useState<any[]>([]);
   const [trainings, setTrainings] = useState<any[]>([]);
   const [dutyTimes, setDutyTimes] = useState<any[]>([]);
+  const [flightChecks, setFlightChecks] = useState<any[]>([]);
   const [pages, setPages] = useState<any[]>([]);
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -186,6 +187,11 @@ export default function DashboardApp() {
   const [trainingModalTitle, setTrainingModalTitle] = useState('');
   const [trainingModalOriginalTitle, setTrainingModalOriginalTitle] = useState('');
   const [dutyModalOpen, setDutyModalOpen] = useState(false);
+  const [flightCheckModalOpen, setFlightCheckModalOpen] = useState(false);
+  const [flightCheckModalMode, setFlightCheckModalMode] = useState<'add' | 'edit'>('add');
+  const [editingFlightCheckId, setEditingFlightCheckId] = useState<string | null>(null);
+  const [selectedFlightCheck, setSelectedFlightCheck] = useState<any | null>(null);
+  const [flightCheckForm, setFlightCheckForm] = useState({ date: simpleDate(new Date().toISOString()), route: '', participants: [] as Array<{ memberId: string; participated: boolean; passed: boolean }> });
   const [pageModalOpen, setPageModalOpen] = useState(false);
   const [modalCategory, setModalCategory] = useState<'ausbildung' | 'fortbildung'>('ausbildung');
   const [showAvailableAusbildungen, setShowAvailableAusbildungen] = useState(false);
@@ -195,16 +201,18 @@ export default function DashboardApp() {
     async function load() {
       setLoading(true);
       try {
-        const [membersRes, trainingsRes, dutiesRes, pagesRes, trainingsManageRes] = await Promise.all([
+        const [membersRes, trainingsRes, dutiesRes, checksRes, pagesRes, trainingsManageRes] = await Promise.all([
           fetch('/api/members'),
           fetch('/api/trainings'),
           fetch('/api/duty-times'),
+          fetch('/api/flight-checks'),
           fetch('/api/handbook/pages'),
           fetch('/api/trainings/manage'),
         ]);
         setMembers(await membersRes.json());
         setTrainings(await trainingsRes.json());
         setDutyTimes(await dutiesRes.json());
+        setFlightChecks(await checksRes.json());
         setPages(await pagesRes.json());
         setAvailableTrainings(await trainingsManageRes.json());
       } catch (err) {
@@ -235,21 +243,64 @@ export default function DashboardApp() {
     () => sortedMembers.filter((member) => ['Flight_Officer', 'Senior_Flight_Officer', 'Flight_Instructor'].includes(member.rank)),
     [sortedMembers]
   );
+  const checkEligibleMembers = useMemo(
+    () => sortedMembers.filter((member) => !['Flight_Student', 'ASD_Co_Director', 'ASD_Director'].includes(member.rank)),
+    [sortedMembers]
+  );
   const studentMembers = useMemo(() => sortedMembers.filter((member) => member.rank === 'Flight_Student'), [sortedMembers]);
   const directorMembers = useMemo(() => sortedMembers.filter((member) => ['ASD_Director', 'ASD_Co_Director'].includes(member.rank)), [sortedMembers]);
 
+  function buildFlightCheckParticipants() {
+    return checkEligibleMembers.map((member) => ({
+      memberId: member.id,
+      participated: false,
+      passed: false,
+    }));
+  }
+
+  function openFlightCheckModal() {
+    setFlightCheckModalMode('add');
+    setEditingFlightCheckId(null);
+    setFlightCheckForm({
+      date: simpleDate(new Date().toISOString()),
+      route: '',
+      participants: buildFlightCheckParticipants(),
+    });
+    setFlightCheckModalOpen(true);
+  }
+
+  function openEditFlightCheckModal(check: any) {
+    setFlightCheckModalMode('edit');
+    setEditingFlightCheckId(check.id);
+    setFlightCheckForm({
+      date: simpleDate(check.date),
+      route: check.route || '',
+      participants: checkEligibleMembers.map((member) => {
+        const existingParticipant = check.participants.find((participant: any) => participant.memberId === member.id);
+        return {
+          memberId: member.id,
+          participated: Boolean(existingParticipant?.participated),
+          passed: Boolean(existingParticipant?.passed),
+        };
+      }),
+    });
+    setFlightCheckModalOpen(true);
+  }
+
   async function refreshData() {
     try {
-      const [membersRes, trainingsRes, dutiesRes, pagesRes, trainingsManageRes] = await Promise.all([
+      const [membersRes, trainingsRes, dutiesRes, checksRes, pagesRes, trainingsManageRes] = await Promise.all([
         fetch('/api/members'),
         fetch('/api/trainings'),
         fetch('/api/duty-times'),
+        fetch('/api/flight-checks'),
         fetch('/api/handbook/pages'),
         fetch('/api/trainings/manage'),
       ]);
       setMembers(await membersRes.json());
       setTrainings(await trainingsRes.json());
       setDutyTimes(await dutiesRes.json());
+      setFlightChecks(await checksRes.json());
       setPages(await pagesRes.json());
       setAvailableTrainings(await trainingsManageRes.json());
     } catch (err) {
@@ -326,6 +377,68 @@ export default function DashboardApp() {
       setError('Training konnte nicht gespeichert werden');
     }
   }
+
+  function handleFlightCheckParticipation(memberId: string, participated: boolean) {
+    setFlightCheckForm((current) => ({
+      ...current,
+      participants: current.participants.map((participant) => {
+        if (participant.memberId !== memberId) return participant;
+        return {
+          ...participant,
+          participated,
+          passed: participated ? participant.passed : false,
+        };
+      }),
+    }));
+  }
+
+  function handleFlightCheckPassed(memberId: string, passed: boolean) {
+    setFlightCheckForm((current) => ({
+      ...current,
+      participants: current.participants.map((participant) => {
+        if (participant.memberId !== memberId) return participant;
+        return {
+          ...participant,
+          passed,
+        };
+      }),
+    }));
+  }
+
+  async function handleFlightCheckSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      await fetch('/api/flight-checks', {
+        method: flightCheckModalMode === 'edit' ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...flightCheckForm,
+          id: editingFlightCheckId,
+        }),
+      });
+      setFlightCheckModalOpen(false);
+      setEditingFlightCheckId(null);
+      await refreshData();
+    } catch (err) {
+      setError('Flugüberprüfung konnte nicht gespeichert werden');
+    }
+  }
+
+  async function handleDeleteFlightCheck(id: string) {
+    if (!confirm('Flugüberprüfung wirklich löschen?')) return;
+    try {
+      await fetch('/api/flight-checks', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      await refreshData();
+    } catch (err) {
+      setError('Flugüberprüfung konnte nicht gelöscht werden');
+    }
+  }
+
   async function handlePromoteMember(memberId: string, newRank: string) {
     try {
       const response = await fetch('/api/members/promote', {
@@ -1087,9 +1200,79 @@ export default function DashboardApp() {
 
             {!loading && activeTab === 'checks' && (
               <section className="rounded-3xl border border-white/10 bg-surface p-6 shadow-glow">
-                <h2 className="text-2xl font-semibold">Flugüberprüfungen</h2>
-                <p className="mt-2 text-slate-400">Dieser Bereich ist derzeit ein Platzhalter. Kommt später.</p>
-                <div className="mt-6 rounded-3xl border border-white/10 bg-black/50 p-6 text-slate-300">Content folgt in einer späteren Version. Bereite Pilotenbewertungen und Flugchecks vor.</div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Flugüberprüfungen</h2>
+                    <p className="mt-2 text-slate-400">Erstelle neue Flugüberprüfungen mit Strecke und Ergebnis pro Mitglied.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openFlightCheckModal}
+                    className="rounded-2xl bg-orange-500 px-4 py-2 text-black transition hover:bg-orange-400"
+                  >
+                    Neue Flugüberprüfung
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  {flightChecks.length === 0 && (
+                    <div className="rounded-3xl border border-white/10 bg-black/50 p-6 text-slate-300">Noch keine Flugüberprüfung vorhanden.</div>
+                  )}
+
+                  {flightChecks.map((check) => {
+                    const participatedCount = check.participants.filter((participant: any) => participant.participated).length;
+                    const passedCount = check.participants.filter((participant: any) => participant.passed).length;
+
+                    return (
+                      <div
+                        key={check.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedFlightCheck(check)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedFlightCheck(check);
+                          }
+                        }}
+                        className="rounded-3xl border border-white/10 bg-black/50 p-4 cursor-pointer transition hover:border-orange-400/40"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-lg font-semibold text-white">{check.route}</p>
+                            <p className="mt-1 text-sm text-slate-400">{new Date(check.date).toLocaleDateString('de-DE')}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEditFlightCheckModal(check);
+                              }}
+                              className="rounded-2xl border border-blue-500/40 px-4 py-2 text-sm text-blue-300 transition hover:bg-blue-500/10"
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteFlightCheck(check.id);
+                              }}
+                              className="rounded-2xl border border-red-500/40 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
+                            >
+                              Löschen
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <p className="rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm text-slate-300">Teilgenommen: <span className="font-semibold text-white">{participatedCount}</span></p>
+                          <p className="rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm text-slate-300">Bestanden: <span className="font-semibold text-white">{passedCount}</span></p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
             )}
 
@@ -1743,6 +1926,134 @@ export default function DashboardApp() {
                     </label>
                     <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">Speichern</button>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {flightCheckModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-semibold text-white">{flightCheckModalMode === 'edit' ? 'Flugüberprüfung bearbeiten' : 'Neue Flugüberprüfung'}</h3>
+                    <button onClick={() => {
+                      setFlightCheckModalOpen(false);
+                      setEditingFlightCheckId(null);
+                    }} className="text-slate-300 hover:text-white">Schließen</button>
+                  </div>
+
+                  <form className="mt-6 space-y-4" onSubmit={handleFlightCheckSubmit}>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <input
+                        type="date"
+                        value={flightCheckForm.date}
+                        onChange={(event) => setFlightCheckForm({ ...flightCheckForm, date: event.target.value })}
+                        className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                        required
+                      />
+                      <input
+                        type="text"
+                        value={flightCheckForm.route}
+                        onChange={(event) => setFlightCheckForm({ ...flightCheckForm, route: event.target.value })}
+                        placeholder="Strecke"
+                        className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/50">
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-white/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+                        <span>Mitglied</span>
+                        <span>Teilgenommen</span>
+                        <span>Bestanden</span>
+                      </div>
+
+                      <div className="max-h-[340px] space-y-2 overflow-y-auto p-4">
+                        {flightCheckForm.participants.map((participant) => {
+                          const member = checkEligibleMembers.find((candidate) => candidate.id === participant.memberId);
+                          if (!member) return null;
+
+                          return (
+                            <div key={participant.memberId} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 rounded-2xl border border-white/10 bg-surface px-4 py-3">
+                              <div>
+                                <p className="font-medium text-white">{member.name}</p>
+                                <p className="text-xs text-slate-400">{member.rank.replaceAll('_', ' ')}</p>
+                              </div>
+                              <label className="inline-flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={participant.participated}
+                                  onChange={(event) => handleFlightCheckParticipation(participant.memberId, event.target.checked)}
+                                  className="h-4 w-4 rounded border-white/10 bg-black/70 text-orange-500"
+                                />
+                              </label>
+                              <label className="inline-flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={participant.passed}
+                                  onChange={(event) => handleFlightCheckPassed(participant.memberId, event.target.checked)}
+                                  className="h-4 w-4 rounded border-white/10 bg-black/70 text-orange-500"
+                                  disabled={!participant.participated}
+                                />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <button type="button" onClick={() => {
+                        setFlightCheckModalOpen(false);
+                        setEditingFlightCheckId(null);
+                      }} className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-300 hover:bg-white/5">Abbrechen</button>
+                      <button className="rounded-2xl bg-orange-500 px-5 py-3 text-black transition hover:bg-orange-400">{flightCheckModalMode === 'edit' ? 'Aktualisieren' : 'Speichern'}</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {selectedFlightCheck && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-3xl rounded-[2rem] border border-white/10 bg-surface p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">{selectedFlightCheck.route}</h3>
+                      <p className="mt-1 text-sm text-slate-400">{new Date(selectedFlightCheck.date).toLocaleDateString('de-DE')}</p>
+                    </div>
+                    <button onClick={() => setSelectedFlightCheck(null)} className="text-slate-300 hover:text-white">Schließen</button>
+                  </div>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <p className="rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-slate-300">
+                      Teilgenommen: <span className="font-semibold text-white">{selectedFlightCheck.participants.filter((participant: any) => participant.participated).length}</span>
+                    </p>
+                    <p className="rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-slate-300">
+                      Bestanden: <span className="font-semibold text-white">{selectedFlightCheck.participants.filter((participant: any) => participant.passed).length}</span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4 overflow-hidden rounded-3xl border border-white/10 bg-black/50">
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-white/10 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+                      <span>Mitglied</span>
+                      <span>Teilgenommen</span>
+                      <span>Bestanden</span>
+                    </div>
+                    <div className="max-h-[360px] space-y-2 overflow-y-auto p-4">
+                      {selectedFlightCheck.participants
+                        .sort((a: any, b: any) => a.member.name.localeCompare(b.member.name, 'de-DE'))
+                        .map((participant: any) => (
+                          <div key={participant.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 rounded-2xl border border-white/10 bg-surface px-4 py-3">
+                            <div>
+                              <p className="font-medium text-white">{participant.member.name}</p>
+                              <p className="text-xs text-slate-400">{participant.member.rank.replaceAll('_', ' ')}</p>
+                            </div>
+                            <span className={`text-sm ${participant.participated ? 'text-green-300' : 'text-slate-500'}`}>{participant.participated ? 'Ja' : 'Nein'}</span>
+                            <span className={`text-sm ${participant.passed ? 'text-green-300' : 'text-slate-500'}`}>{participant.passed ? 'Ja' : 'Nein'}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

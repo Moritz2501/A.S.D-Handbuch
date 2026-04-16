@@ -14,6 +14,7 @@ model Member {
   joinedAt     DateTime
   trainings    Training[]
   dutyTimes    DutyTime[]
+  flightChecks FlightCheckParticipant[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -40,6 +41,29 @@ model DutyTime {
   isVacation  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model FlightCheck {
+  id          String                   @id @default(uuid())
+  route       String
+  date        DateTime
+  participants FlightCheckParticipant[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model FlightCheckParticipant {
+  id            String      @id @default(uuid())
+  flightCheck   FlightCheck @relation(fields: [flightCheckId], references: [id], onDelete: Cascade)
+  flightCheckId String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId      String
+  participated  Boolean     @default(false)
+  passed        Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([flightCheckId, memberId])
 }
 
 model HandbookPage {
