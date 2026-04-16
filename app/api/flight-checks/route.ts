@@ -7,16 +7,27 @@ export async function GET() {
     return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const checks = await prisma.flightCheck.findMany({
-    include: {
-      participants: {
-        include: { member: true },
+  try {
+    const checks = await prisma.flightCheck.findMany({
+      include: {
+        participants: {
+          include: { member: true },
+        },
       },
-    },
-    orderBy: { date: 'desc' },
-  });
+      orderBy: { date: 'desc' },
+    });
 
-  return NextResponse.json(checks);
+    return NextResponse.json(checks);
+  } catch (error: any) {
+    // Wenn Migration noch nicht ausgeführt wurde, soll das Dashboard trotzdem laden.
+    if (error?.code === 'P2021') {
+      return NextResponse.json([]);
+    }
+    return new Response(JSON.stringify({ error: 'Flight checks could not be loaded' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 export async function POST(req: NextRequest) {
