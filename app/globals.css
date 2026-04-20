@@ -60,3 +60,27 @@ select {
 .handbook-richtext p {
   margin: 0.5rem 0;
 }
+
+.heart-pulse {
+  animation: heart-pulse 1.35s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  25% {
+    transform: scale(1.18);
+  }
+
+  50% {
+    transform: scale(0.92);
+  }
+
+  75% {
+    transform: scale(1.12);
+  }
+}
