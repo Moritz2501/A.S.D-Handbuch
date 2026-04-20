@@ -62,7 +62,7 @@ select {
 }
 
 .heart-pulse {
-  animation: heart-pulse 1.35s ease-in-out infinite;
+  animation: heart-pulse 1.8s ease-in-out infinite;
   transform-origin: center;
 }
 
@@ -72,15 +72,23 @@ select {
     transform: scale(1);
   }
 
-  25% {
-    transform: scale(1.18);
+  12% {
+    transform: scale(1.08);
   }
 
-  50% {
-    transform: scale(0.92);
+  24% {
+    transform: scale(0.97);
   }
 
-  75% {
+  36% {
     transform: scale(1.12);
+  }
+
+  48% {
+    transform: scale(1);
+  }
+
+  100% {
+    transform: scale(1);
   }
 }
