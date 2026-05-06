@@ -74,7 +74,7 @@ Modernes Fullstack-Next.js-Projekt für das **Air Support Division Handbuch** ei
    ```bash
    npm run dev
    ```
-   Server läuft unter `http://localhost:3000`
+   Server läuft unter `https://asd-handbuch.vercel.app`
 
 ## Verfügbare NPM Scripts
 
@@ -105,9 +105,7 @@ npm run prisma:migrate    # Datenbank-Migrations durchführen
 
 **Standardanmeldedaten** (in Produktion ändern):
 - **Benutzer**: `asdadmin`
-- **Passwort**: `asd-secret-password`
-
-> ⚠️ Für Produktionsumgebungen unbedingt sichere Passwörter verwenden und über Umgebungsvariablen setzen.
+- **Passwort**: `*****`
 
 ## Technologie-Stack
 
